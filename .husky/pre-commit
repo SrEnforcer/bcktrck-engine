@@ -1,0 +1,7 @@
+#!/bin/sh
+# Runs the type and lint gates on the full project before each commit.
+# Mirrors the CI check suite — if it fails here, it will fail in CI.
+#
+# For monorepos: tsc uses project references (tsconfig.json at root),
+# so --build covers all packages in one pass.
+pnpm tsc --noEmit && pnpm lint
