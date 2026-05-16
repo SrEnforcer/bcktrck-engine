@@ -1,51 +1,89 @@
-# TSF++ workspace
+---
+applyTo: "{**/routes/**,**/handlers/**,**/api/**}/*.ts"
+---
 
-This repository follows the **TSF++ coding standard**.
+# TSF++ API rules
 
-## Language
+Full standard: `node_modules/@tsfpp/standard/spec/API_CODING_STANDARD.md`
+Boundary API: `node_modules/@tsfpp/boundary/README.md`
+Extends: tsfpp-base.instructions.md (all base rules apply)
 
-All code, comments, documentation, variable names, type names, JSDoc, commit messages, and PR descriptions are written in **US technical English**. No exceptions. This applies to every file in the repository regardless of file type.
+## Handler shape
 
-When communicating with the developer in chat, follow their language. When touching any file in the repository, English only.
+Handlers are thin. The only permitted steps are: parse → call use-case → map response.
 
-## Coding standard
+```ts
+const createTrackHandler = async (req: Request): Promise<Response> => {
+  const ctx    = extractContext(req)                        // 1. context
+  const body   = CreateTrackSchema.safeParse(await req.json())
+  if (!body.success) return fromZodError(body.error, ctx.traceId)  // 2. validate
 
-The normative source is `node_modules/@tsfpp/standard/spec/CODING_STANDARD.md`.
-Profile overlays (extend the base standard):
-- API handlers: `node_modules/@tsfpp/standard/spec/API_CODING_STANDARD.md`
-- React components: `node_modules/@tsfpp/standard/spec/REACT_CODING_STANDARD.md`
-- Security: `node_modules/@tsfpp/standard/spec/SECURITY_CODING_STANDARD.md`
+  const result = await createTrack(body.data)              // 3. use-case
+  return pipe(result, fold(apiErrorToResponse, createdResponse))    // 4. map
+}
+```
 
-Scoped instruction files inject the relevant rules automatically per file type. When in doubt, read the standard.
+## Boundary imports
 
-## Non-negotiables
+All HTTP primitives come from `@tsfpp/boundary`:
 
-- No `any`, `!`, unsafe `as`, `class`, `enum`, `let`, `var`, mutation, or `throw` in core.
-- Every exported symbol has a JSDoc block.
-- Errors are data: `Result<T, E>`. Never `throw` in core logic.
-- All ADT imports come from `@tsfpp/prelude`. Never import from `ramda` directly.
-- Rule violations require `// DEVIATION(N.M): <reason>` at the site and a note in the PR.
+```ts
+import {
+  extractContext, fromZodError, apiErrorToResponse,
+  okResponse, createdResponse, noContentResponse, acceptedResponse,
+  problemResponse, mkProblem,
+} from '@tsfpp/boundary'
+```
 
-## Agents
+Never construct `new Response(...)` directly in a handler.
 
-Use the right agent for the task:
+## Validation
 
-| Task | Agent |
-|------|-------|
-| Write new TSF++-compliant code | `tsfpp-guarded-coding` |
-| Audit a file, module, or layer for violations | `tsfpp-audit` |
-| Fix violations from an audit report | `tsfpp-refactor-engineer` |
-| Add JSDoc, DEVIATION comments, and code markers | `tsfpp-annotate` |
+All input validated with Zod at the boundary. Schema lives next to the route:
 
-Agents hand off to each other — after coding, audit; after audit, refactor; after refactor, annotate.
+```ts
+const CreateTrackSchema = z.object({
+  title:    z.string().min(1).max(255),
+  artistId: z.string().uuid(),
+})
+```
 
-## Instruction files
+Never pass unvalidated `req.body` or `req.json()` into the domain.
 
-Scoped instructions are injected automatically:
+## Errors
 
-| File | Active for |
-|------|-----------|
-| `tsfpp-base.instructions.md` | All `.ts` files |
-| `tsfpp-prelude.instructions.md` | All `.ts` files |
-| `tsfpp-react.instructions.md` | All `.tsx` files |
-| `tsfpp-api.instructions.md` | Routes, handlers, API files |
+```ts
+// Yes — Result propagates; mapped once at the boundary
+const result: Result<Track, ApiError> = await createTrack(input)
+return pipe(result, fold(apiErrorToResponse, createdResponse))
+
+// No — throw crosses the boundary untyped
+throw new Error('not found')
+```
+
+## Context
+
+```ts
+const { traceId, principalId } = extractContext(req)
+// Never: req.headers.get('x-trace-id') in business logic
+```
+
+## Status codes
+
+| Situation | Code | Builder |
+|-----------|------|---------|
+| Read success | 200 | `okResponse` |
+| Created | 201 | `createdResponse` |
+| Accepted (async) | 202 | `acceptedResponse` |
+| No content | 204 | `noContentResponse` |
+| Validation failure | 422 | `fromZodError` |
+| Not found | 404 | `problemResponse(mkProblem(404, ...))` |
+| Conflict | 409 | `problemResponse(mkProblem(409, ...))` |
+| Server error | 500 | `problemResponse(mkProblem(500, ...))` |
+
+## Security
+
+- All routes require authentication unless explicitly marked `// PUBLIC`
+- Never log `principalId`, credentials, or request bodies at `info` level
+- Never reflect user input in error messages without sanitisation
+- Idempotency keys required on mutating operations — use `withIdempotency`

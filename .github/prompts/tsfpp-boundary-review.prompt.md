@@ -1,152 +1,111 @@
 ---
-description: Scaffolds a new TSF++-compliant module with types, smart constructors, exports, JSDoc, and a test file skeleton.
-name: TSF++ new module
-argument-hint: "module=<name> layer=<core|api|dal|react> description=<one sentence>"
+description: Targeted review of API boundary code against @tsfpp/boundary patterns and the API coding standard. Faster than a full audit — no report file, inline findings only.
+name: TSF++ boundary review
+argument-hint: "File(s) or directory to review, e.g. src/routes/tracks.ts"
 agent: agent
 tools:
-  - edit/createFile
-  - edit/editFiles
-  - read/readFile
-  - search/fileSearch
+  - read
+  - search/codebase
+  - search/textSearch
+  - search/usages
   - vscode/askQuestions
 ---
 
-# TSF++ new module
+# TSF++ boundary review
 
-Scaffold a new TSF++-compliant module from scratch.
+A focused, read-only review of API handler and route code against the `@tsfpp/boundary` patterns and the API coding standard.
 
-The canonical standard is at `node_modules/@tsfpp/standard/spec/CODING_STANDARD.md`.
-The prelude API is at `node_modules/@tsfpp/prelude/README.md`.
+The API standard is at `node_modules/@tsfpp/standard/spec/API_CODING_STANDARD.md`.
+The boundary API surface is at `node_modules/@tsfpp/boundary/README.md` and `node_modules/@tsfpp/boundary/RECIPES.md`.
 
----
-
-## Required inputs
-
-If any of the following are missing, ask for them before proceeding:
-
-- **Module name** — e.g. `track`, `artist`, `audio-asset`
-- **Layer** — `core` · `api` · `dal` · `react`
-- **Domain description** — one sentence: what does this module represent or do?
+> Read only. No file edits. Findings are reported inline in chat.
+> For a full audit with a tracked report, use the `tsfpp-audit` agent with `focus: boundary`.
 
 ---
 
-## What to generate
+## Required input
 
-### 1. Source file — `src/<layer>/<module-name>.ts`
+If a target has not been provided, ask:
 
-```ts
-/**
- * @module <module-name>
- *
- * <Domain description>.
- *
- * @packageDocumentation
- */
+> Which file(s) or directory should I review? (e.g. `src/routes/tracks.ts`, `src/routes/`)
 
-import { type Option, type Result, some, none, ok, err } from '@tsfpp/prelude'
+---
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+## Checklist
 
-/**
- * <What this branded type represents in the domain.>
- */
-export type <ModuleName>Id = Brand<string, '<ModuleName>Id'>
+Review every handler in the target against each item below. Report findings as a table at the end.
 
-/**
- * <What this sum type represents. List variants.>
- */
-export type <ModuleName> = {
-  readonly id:        <ModuleName>Id
-  readonly <field>:   <Type>
-  // … additional fields
-}
+### Handler shape
 
-// ─── Errors ───────────────────────────────────────────────────────────────────
+- [ ] Handler is a pure function: `(req: Request) => Promise<Response>`
+- [ ] Only three steps: parse → call use-case → map response
+- [ ] No business logic inside the handler body
+- [ ] No database calls, logging setup, or infrastructure imports in the handler
 
-/**
- * Errors that can occur when working with <ModuleName> values.
- */
-export type <ModuleName>Error =
-  | { readonly kind: 'invalid_id';    readonly raw: string }
-  | { readonly kind: 'not_found';     readonly id:  <ModuleName>Id }
+### Context extraction
 
-// ─── Smart constructors ───────────────────────────────────────────────────────
+- [ ] `extractContext` used to obtain `traceId` and `principalId`
+- [ ] Raw headers (`req.headers.get(...)`) not accessed in business logic
+- [ ] `traceId` passed to all `mkProblem` calls
 
-/**
- * Constructs a validated {@link <ModuleName>Id} from a raw string.
- *
- * @param raw - The raw string to validate.
- * @returns `some` with a branded id when valid; `none` when the format is invalid.
- *
- * @example
- * const id = mk<ModuleName>Id('abc-123')
- * // => some(<ModuleName>Id)
- */
-export const mk<ModuleName>Id = (raw: string): Option<<ModuleName>Id> =>
-  raw.length > 0 ? some(raw as <ModuleName>Id) : none
+### Input validation
 
-/**
- * Constructs a {@link <ModuleName>} from validated inputs.
- *
- * @param params - Validated field values.
- * @returns `ok` with the constructed value; `err` with a typed error on validation failure.
- */
-export const mk<ModuleName> = (params: {
-  readonly id:      <ModuleName>Id
-  readonly <field>: <Type>
-}): Result<<ModuleName>, <ModuleName>Error> => {
-  // validate invariants here
-  return ok(params)
-}
+- [ ] All input validated with a Zod schema before entering the domain
+- [ ] Schema defined adjacent to the route, not inline in the handler
+- [ ] `fromZodError` used to map `ZodError` to a typed response
+- [ ] No unvalidated `req.json()` or `req.body` passed to the domain
+
+### Response builders
+
+- [ ] `okResponse` used for 200
+- [ ] `createdResponse` used for 201
+- [ ] `acceptedResponse` used for 202 (async operations)
+- [ ] `noContentResponse` used for 204
+- [ ] `problemResponse(mkProblem(...))` used for 4xx/5xx
+- [ ] `new Response(...)` not constructed directly in a handler
+
+### Error mapping
+
+- [ ] `apiErrorToResponse` used as the single error mapping point
+- [ ] No `throw` or `try/catch` in the handler body
+- [ ] `fold` or `pipe` used to map `Result` to a response — no manual `if (isErr(...))` branching
+
+### Security baseline
+
+- [ ] Route requires authentication unless marked `// PUBLIC`
+- [ ] `principalId` not logged at `info` level
+- [ ] No user input reflected in error `detail` fields without sanitisation
+- [ ] Mutating routes (`POST`, `PUT`, `PATCH`, `DELETE`) have idempotency handling or a documented reason why it is not needed
+
+### Imports
+
+- [ ] All boundary primitives imported from `@tsfpp/boundary`
+- [ ] No boundary primitives re-implemented locally
+
+---
+
+## Output format
+
+Report findings as a table per handler:
+
+```
+## `POST /v1/tracks` — createTrackHandler
+
+| Check | Status | Finding |
+|-------|--------|---------|
+| Handler shape | ✅ | — |
+| Context extraction | ⚠️ | `req.headers.get('x-trace-id')` used directly on line 14 |
+| Input validation | ✅ | — |
+| Response builders | ❌ | `new Response(JSON.stringify(...), { status: 200 })` on line 31 |
+| Error mapping | ✅ | — |
+| Security baseline | ✅ | — |
+| Imports | ✅ | — |
 ```
 
-### 2. Test file — `src/<layer>/<module-name>.test.ts`
+After all handlers, append a one-line summary:
 
-```ts
-import { describe, expect, it } from 'vitest'
-import { isSome, isNone, isOk, isErr } from '@tsfpp/prelude'
-import { mk<ModuleName>Id, mk<ModuleName> } from './<module-name>'
-
-describe('mk<ModuleName>Id', () => {
-  it('returns some for a valid id', () => {
-    expect(isSome(mk<ModuleName>Id('abc-123'))).toBe(true)
-  })
-
-  it('returns none for an empty string', () => {
-    expect(isNone(mk<ModuleName>Id(''))).toBe(true)
-  })
-})
-
-describe('mk<ModuleName>', () => {
-  it('returns ok for valid inputs', () => {
-    // arrange
-    // act
-    // assert
-  })
-
-  it('returns err for invalid inputs', () => {
-    // arrange
-    // act
-    // assert
-  })
-})
+```
+3 handlers reviewed · 2 findings · 1 clean
 ```
 
----
-
-## Rules
-
-- Never use placeholder comments like `// TODO: implement` in the source file — either implement it or use a properly formatted `// TODO(unknown, <date>): <reason>` marker.
-- The error union must cover every failure mode the smart constructors can produce.
-- Every exported symbol must have a JSDoc block before the file is considered complete.
-- Test file must have at least one passing case and one failing case per smart constructor.
-- Follow layer-specific constraints from `tsfpp-guarded-coding` for the specified layer.
-
----
-
-## Completion
-
-Report:
-1. Files created and their paths
-2. Exported symbols and their types
-3. Any invariants that still need implementing (listed as `TODO` markers in the source)
+If no findings are found, say so explicitly — do not omit the summary.
