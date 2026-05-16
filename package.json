@@ -1,0 +1,29 @@
+{
+  "name": "@bcktrck/engine",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "packageManager": "pnpm@11.1.2+sha512.415a1cc25974731e75455c1468371be74c5aa5fb7621b50d4056d222451609f11412f23fd602e6169f1e060466641f798597e1be961a10688836a67b16569499",
+  "devDependencies": {
+    "@tsfpp/agents": "^1.1.0",
+    "@tsfpp/boundary": "^1.0.1",
+    "@tsfpp/eslint-config": "^1.0.1",
+    "@tsfpp/standard": "^1.0.0",
+    "@tsfpp/tsconfig": "^1.0.0",
+    "@types/node": "^25.8.0",
+    "typescript": "^6.0.3"
+  },
+  "type": "module",
+  "dependencies": {
+    "@tsfpp/prelude": "^1.4.1",
+    "lucide": "^1.16.0"
+  }
+}
