@@ -11,7 +11,7 @@
 /* eslint-disable max-lines */
 
 import type { EdgeStyleValue, IndexedTree } from '../layout/types'
-import { assoc, entriesOfMap, intoMap, intoSet, unique } from '@tsfpp/prelude'
+import { assoc, entriesOfMap, fromNullable, getOrElse, intoMap, intoSet, isNone, unique } from '@tsfpp/prelude'
 import { extractTopLevelBlock, type BlockLine } from './dsl-blocks'
 import { buildHandleMap } from '../resolver/handles'
 import { collectNodes } from '../resolver/tree'
@@ -208,33 +208,39 @@ type ParseVariableDeclarationInput = {
 
 const parseVariableDeclaration = (input: ParseVariableDeclarationInput): ParseStyleResult<VariableDeclaration> | undefined => {
   const variableMatch = input.line.match(/^\$([a-zA-Z_][a-zA-Z0-9_-]*)\s*(?::\s*([a-zA-Z0-9_-]+)\s*)?=\s*(.+)$/)
-  if (variableMatch === null) {
+  const variableMatchOption = fromNullable(variableMatch)
+  if (isNone(variableMatchOption)) {
     return undefined
   }
 
-  const variableName = variableMatch[1]
-  const variableIcon = variableMatch[2]
-  const variableValue = variableMatch[3]
-  if (variableName === undefined || variableValue === undefined) {
+  const variableNameOption = fromNullable(variableMatchOption.value[1])
+  const variableIconOption = fromNullable(variableMatchOption.value[2])
+  const variableValueOption = fromNullable(variableMatchOption.value[3])
+  if (isNone(variableNameOption) || isNone(variableValueOption)) {
     return {
       ok: false,
       error: parseError(input.lineNo, input.col, `Invalid ${input.context} variable declaration: ${input.line}`)
     }
   }
 
-  if (variableIcon !== undefined && !isKnownIcon(variableIcon)) {
+  const variableName = variableNameOption.value
+  const variableValue = variableValueOption.value
+
+  if (!isNone(variableIconOption) && !isKnownIcon(variableIconOption.value)) {
     return {
       ok: false,
-      error: parseError(input.lineNo, input.col, `Unknown icon in variable declaration: ${variableIcon}`)
+      error: parseError(input.lineNo, input.col, `Unknown icon in variable declaration: ${variableIconOption.value}`)
     }
   }
+
+  const iconEntry = isNone(variableIconOption) ? {} : { variableIcon: variableIconOption.value }
 
   return {
     ok: true,
     value: {
       variableName,
       variableValue,
-      ...(variableIcon !== undefined ? { variableIcon } : {})
+      ...iconEntry
     }
   }
 }
@@ -244,13 +250,13 @@ const applyVariableDeclaration = (
   declaration: VariableDeclaration
 ): ParsedDefinitions => ({
   variables: assoc(declaration.variableName, declaration.variableValue)(definitions.variables),
-  variableIcons: declaration.variableIcon === undefined
+  variableIcons: isNone(fromNullable(declaration.variableIcon))
     ? definitions.variableIcons.filter((entry) => entry.variable !== declaration.variableName)
     : [
         ...definitions.variableIcons.filter((entry) => entry.variable !== declaration.variableName),
         {
           variable: declaration.variableName,
-          icon: declaration.variableIcon,
+          icon: getOrElse<string>(() => '')(fromNullable(declaration.variableIcon)),
           normalizedValue: declaration.variableValue.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-')
         }
       ]
@@ -334,18 +340,20 @@ type ParseNodeKindSelectorMatchInput = {
 }
 
 const parseNodeKindSelectorMatch = (input: ParseNodeKindSelectorMatchInput): ParseStyleResult<StyleSelector> => {
-  if (input.rawKind === undefined) {
+  const rawKindOption = fromNullable(input.rawKind)
+  if (isNone(rawKindOption)) {
     return selectorError(input.line, input.lineNo, input.col)
   }
 
-  const nodeKind = normalizeSelectorNodeKind(input.rawKind)
-  return nodeKind === undefined
-    ? { ok: false, error: parseError(input.lineNo, input.col, `Unknown kind selector: ${input.rawKind}`) }
+  const nodeKind = normalizeSelectorNodeKind(rawKindOption.value)
+  const nodeKindOption = fromNullable(nodeKind)
+  return isNone(nodeKindOption)
+    ? { ok: false, error: parseError(input.lineNo, input.col, `Unknown kind selector: ${rawKindOption.value}`) }
     : {
         ok: true,
         value: {
           kind: input.kind,
-          nodeKind,
+          nodeKind: nodeKindOption.value,
           line: input.lineNo,
           col: input.col
         }
@@ -354,15 +362,16 @@ const parseNodeKindSelectorMatch = (input: ParseNodeKindSelectorMatchInput): Par
 
 const parseHandleSelector = (line: string, lineNo: number, col: number): ParseStyleResult<StyleSelector> | undefined => {
   const handleChildren = line.match(/^@([a-zA-Z0-9_-]+):children$/)
-  if (handleChildren !== null) {
-    const handle = handleChildren[1]
-    return handle === undefined
+  const handleChildrenOption = fromNullable(handleChildren)
+  if (!isNone(handleChildrenOption)) {
+    const handleOption = fromNullable(handleChildrenOption.value[1])
+    return isNone(handleOption)
       ? selectorError(line, lineNo, col)
       : {
           ok: true,
           value: {
             kind: 'children',
-            handle,
+            handle: handleOption.value,
             line: lineNo,
             col
           }
@@ -370,18 +379,19 @@ const parseHandleSelector = (line: string, lineNo: number, col: number): ParseSt
   }
 
   const handleOnly = line.match(/^@([a-zA-Z0-9_-]+)$/)
-  if (handleOnly === null) {
+  const handleOnlyOption = fromNullable(handleOnly)
+  if (isNone(handleOnlyOption)) {
     return undefined
   }
 
-  const handle = handleOnly[1]
-  return handle === undefined
+  const handleOption = fromNullable(handleOnlyOption.value[1])
+  return isNone(handleOption)
     ? selectorError(line, lineNo, col)
     : {
         ok: true,
         value: {
           kind: 'handle',
-          handle,
+          handle: handleOption.value,
           line: lineNo,
           col
         }
@@ -390,15 +400,16 @@ const parseHandleSelector = (line: string, lineNo: number, col: number): ParseSt
 
 const parseRoleSelector = (line: string, lineNo: number, col: number): ParseStyleResult<StyleSelector> | undefined => {
   const roleChildren = line.match(/^\.role-([a-zA-Z0-9_-]+):children$/)
-  if (roleChildren !== null) {
-    const role = roleChildren[1]
-    return role === undefined
+  const roleChildrenOption = fromNullable(roleChildren)
+  if (!isNone(roleChildrenOption)) {
+    const roleOption = fromNullable(roleChildrenOption.value[1])
+    return isNone(roleOption)
       ? selectorError(line, lineNo, col)
       : {
           ok: true,
           value: {
             kind: 'role-children',
-            role: role.toLowerCase(),
+            role: roleOption.value.toLowerCase(),
             line: lineNo,
             col
           }
@@ -406,18 +417,19 @@ const parseRoleSelector = (line: string, lineNo: number, col: number): ParseStyl
   }
 
   const roleOnly = line.match(/^\.role-([a-zA-Z0-9_-]+)$/)
-  if (roleOnly === null) {
+  const roleOnlyOption = fromNullable(roleOnly)
+  if (isNone(roleOnlyOption)) {
     return undefined
   }
 
-  const role = roleOnly[1]
-  return role === undefined
+  const roleOption = fromNullable(roleOnlyOption.value[1])
+  return isNone(roleOption)
     ? selectorError(line, lineNo, col)
     : {
         ok: true,
         value: {
           kind: 'role',
-          role: role.toLowerCase(),
+          role: roleOption.value.toLowerCase(),
           line: lineNo,
           col
         }
@@ -426,15 +438,16 @@ const parseRoleSelector = (line: string, lineNo: number, col: number): ParseStyl
 
 const parseTypeSelector = (line: string, lineNo: number, col: number): ParseStyleResult<StyleSelector> | undefined => {
   const typeChildren = line.match(/^\.type-([a-zA-Z0-9_-]+):children$/)
-  if (typeChildren !== null) {
-    const type = typeChildren[1]
-    return type === undefined
+  const typeChildrenOption = fromNullable(typeChildren)
+  if (!isNone(typeChildrenOption)) {
+    const typeOption = fromNullable(typeChildrenOption.value[1])
+    return isNone(typeOption)
       ? selectorError(line, lineNo, col)
       : {
           ok: true,
           value: {
             kind: 'type-children',
-            type: type.toLowerCase(),
+            type: typeOption.value.toLowerCase(),
             line: lineNo,
             col
           }
@@ -442,18 +455,19 @@ const parseTypeSelector = (line: string, lineNo: number, col: number): ParseStyl
   }
 
   const typeOnly = line.match(/^\.type-([a-zA-Z0-9_-]+)$/)
-  if (typeOnly === null) {
+  const typeOnlyOption = fromNullable(typeOnly)
+  if (isNone(typeOnlyOption)) {
     return undefined
   }
 
-  const type = typeOnly[1]
-  return type === undefined
+  const typeOption = fromNullable(typeOnlyOption.value[1])
+  return isNone(typeOption)
     ? selectorError(line, lineNo, col)
     : {
         ok: true,
         value: {
           kind: 'type',
-          type: type.toLowerCase(),
+          type: typeOption.value.toLowerCase(),
           line: lineNo,
           col
         }
@@ -462,18 +476,20 @@ const parseTypeSelector = (line: string, lineNo: number, col: number): ParseStyl
 
 const parseNodeKindSelector = (line: string, lineNo: number, col: number): ParseStyleResult<StyleSelector> | undefined => {
   const kindChildren = line.match(/^\.kind-([a-zA-Z0-9_-]+):children$/)
-  if (kindChildren !== null) {
+  const kindChildrenOption = fromNullable(kindChildren)
+  if (!isNone(kindChildrenOption)) {
     return parseNodeKindSelectorMatch({
       line,
       lineNo,
       col,
-      rawKind: kindChildren[1],
+      rawKind: kindChildrenOption.value[1],
       kind: 'node-kind-children'
     })
   }
 
   const kindOnly = line.match(/^\.kind-([a-zA-Z0-9_-]+)$/)
-  if (kindOnly === null) {
+  const kindOnlyOption = fromNullable(kindOnly)
+  if (isNone(kindOnlyOption)) {
     return undefined
   }
 
@@ -481,7 +497,7 @@ const parseNodeKindSelector = (line: string, lineNo: number, col: number): Parse
     line,
     lineNo,
     col,
-    rawKind: kindOnly[1],
+    rawKind: kindOnlyOption.value[1],
     kind: 'node-kind'
   })
 }
@@ -494,24 +510,24 @@ const parseSelector = (line: string, lineNo: number, col: number): ParseStyleRes
     }
   }
 
-  const parsedHandle = parseHandleSelector(line, lineNo, col)
-  if (parsedHandle !== undefined) {
-    return parsedHandle
+  const parsedHandleOption = fromNullable(parseHandleSelector(line, lineNo, col))
+  if (!isNone(parsedHandleOption)) {
+    return parsedHandleOption.value
   }
 
-  const parsedRole = parseRoleSelector(line, lineNo, col)
-  if (parsedRole !== undefined) {
-    return parsedRole
+  const parsedRoleOption = fromNullable(parseRoleSelector(line, lineNo, col))
+  if (!isNone(parsedRoleOption)) {
+    return parsedRoleOption.value
   }
 
-  const parsedType = parseTypeSelector(line, lineNo, col)
-  if (parsedType !== undefined) {
-    return parsedType
+  const parsedTypeOption = fromNullable(parseTypeSelector(line, lineNo, col))
+  if (!isNone(parsedTypeOption)) {
+    return parsedTypeOption.value
   }
 
-  const parsedKind = parseNodeKindSelector(line, lineNo, col)
-  if (parsedKind !== undefined) {
-    return parsedKind
+  const parsedKindOption = fromNullable(parseNodeKindSelector(line, lineNo, col))
+  if (!isNone(parsedKindOption)) {
+    return parsedKindOption.value
   }
 
   if (line === '.node-name') {
@@ -533,21 +549,24 @@ const parseSelector = (line: string, lineNo: number, col: number): ParseStyleRes
 
 const parseDeclaration = (line: string, lineNo: number, col: number): ParseStyleResult<StyleDeclaration> => {
   const match = line.match(/^([a-z-]+)\s*:\s*(.+?)\s*;?$/)
-  if (match === null) {
+  const matchOption = fromNullable(match)
+  if (isNone(matchOption)) {
     return {
       ok: false,
       error: parseError(lineNo, col, `Invalid style declaration: ${line}`)
     }
   }
 
-  const propertyText = match[1]
-  const rawValue = match[2]
-  if (propertyText === undefined || rawValue === undefined) {
+  const propertyTextOption = fromNullable(matchOption.value[1])
+  const rawValueOption = fromNullable(matchOption.value[2])
+  if (isNone(propertyTextOption) || isNone(rawValueOption)) {
     return {
       ok: false,
       error: parseError(lineNo, col, `Invalid style declaration: ${line}`)
     }
   }
+  const propertyText = propertyTextOption.value
+  const rawValue = rawValueOption.value
 
   if (!isStylePropertyName(propertyText)) {
     return {
@@ -612,9 +631,10 @@ const parseStyleVariableOrSelectorLine = (
     col: input.firstIndent + 1,
     context: 'style'
   })
-  if (variableDeclaration !== undefined) {
-    if (!variableDeclaration.ok) {
-      return { ok: false, error: variableDeclaration.error }
+  const variableDeclarationOption = fromNullable(variableDeclaration)
+  if (!isNone(variableDeclarationOption)) {
+    if (!variableDeclarationOption.value.ok) {
+      return { ok: false, error: variableDeclarationOption.value.error }
     }
 
     const nextDefinitions = applyVariableDeclaration(
@@ -622,7 +642,7 @@ const parseStyleVariableOrSelectorLine = (
         variables: input.state.variables,
         variableIcons: input.state.variableIcons
       },
-      variableDeclaration.value
+      variableDeclarationOption.value.value
     )
 
     return {
@@ -649,9 +669,11 @@ const parseStyleDeclarationLine = (
     return { ok: false, error: parseError(input.lineNo, input.indent + 1, 'Unexpected style indentation') }
   }
 
-  if (input.state.currentRule === undefined) {
+  const currentRuleOption = fromNullable(input.state.currentRule)
+  if (isNone(currentRuleOption)) {
     return { ok: false, error: parseError(input.lineNo, input.indent + 1, 'Style declaration must be under a selector') }
   }
+  const currentRule = currentRuleOption.value
 
   const declaration = parseDeclaration(input.trimmed, input.lineNo, input.indent + 1)
   if (!declaration.ok) {
@@ -659,8 +681,8 @@ const parseStyleDeclarationLine = (
   }
 
   const updatedRule: StyleRule = {
-    ...input.state.currentRule,
-    declarations: [...input.state.currentRule.declarations, declaration.value]
+    ...currentRule,
+    declarations: [...currentRule.declarations, declaration.value]
   }
   return {
     ...input.state,
@@ -708,10 +730,11 @@ const parseStyleLines = (
   }
 
   const emptyRule = finalState.rules.find((rule) => rule.declarations.length === 0)
-  if (emptyRule !== undefined) {
+  const emptyRuleOption = fromNullable(emptyRule)
+  if (!isNone(emptyRuleOption)) {
     return {
       ok: false,
-      error: parseError(emptyRule.selector.line, emptyRule.selector.col, 'Style selector must include at least one declaration')
+      error: parseError(emptyRuleOption.value.selector.line, emptyRuleOption.value.selector.col, 'Style selector must include at least one declaration')
     }
   }
 
@@ -773,20 +796,22 @@ const parseDefinitionsLineAtIndent = (
     col: firstIndent + 1,
     context: 'defs'
   })
-  if (declaration === undefined) {
+  const declarationOption = fromNullable(declaration)
+  if (isNone(declarationOption)) {
     return {
       ok: false,
       error: parseError(line.line, firstIndent + 1, 'Defs block only supports variable declarations')
     }
   }
+  const safeDeclaration = declarationOption.value
 
-  if (!declaration.ok) {
-    return { ok: false, error: declaration.error }
+  if (!safeDeclaration.ok) {
+    return { ok: false, error: safeDeclaration.error }
   }
 
   return {
     ok: true,
-    definitions: applyVariableDeclaration(state.definitions, declaration.value)
+    definitions: applyVariableDeclaration(state.definitions, safeDeclaration.value)
   }
 }
 
@@ -855,15 +880,20 @@ export const extractStyleSheet = (source: string): StyleExtractionResult => {
 
 const normalizeRole = (value: string): string => value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-')
 
+const trimmedLookupOr = (variables: ReadonlyMap<string, string>, key: string, fallback: string): string => {
+  const valueOption = fromNullable(variables.get(key))
+  return isNone(valueOption) ? fallback : valueOption.value.trim()
+}
+
 const resolveRoleAlias = (role: string, variables: ReadonlyMap<string, string>): string => {
   const trimmed = role.trim()
   if (trimmed.startsWith('$')) {
     const variableName = trimmed.slice(1)
-    return variables.get(variableName)?.trim() ?? trimmed
+    return trimmedLookupOr(variables, variableName, trimmed)
   }
   if (trimmed.startsWith('@')) {
     const variableName = trimmed.slice(1)
-    return variables.get(variableName)?.trim() ?? trimmed
+    return trimmedLookupOr(variables, variableName, trimmed)
   }
   return trimmed
 }
@@ -908,7 +938,7 @@ const appendRoleHandle = (
   role: string,
   handle: string
 ): ReadonlyMap<string, readonly string[]> => {
-  const existing = roleToHandles.get(role) ?? []
+  const existing = getOrElse<readonly string[]>(() => [])(fromNullable(roleToHandles.get(role)))
   return assoc(role, appendReadonly(existing, handle))(roleToHandles)
 }
 
@@ -918,8 +948,8 @@ const buildRoleHandleMap = (
   variables: ReadonlyMap<string, string>
 ): ReadonlyMap<string, readonly string[]> =>
   nodes.reduce<ReadonlyMap<string, readonly string[]>>((acc, node) => {
-    const handle = nodeToHandle.get(node)
-    if (handle === undefined) {
+    const handleOption = fromNullable(nodeToHandle.get(node))
+    if (isNone(handleOption)) {
       return acc
     }
 
@@ -928,7 +958,7 @@ const buildRoleHandleMap = (
       .flatMap((attr) => attrValueToRoleValues(attr.value, variables))
       .map(normalizeRole)
 
-    return roles.reduce((nextAcc, role) => appendRoleHandle(nextAcc, role, handle), acc)
+    return roles.reduce((nextAcc, role) => appendRoleHandle(nextAcc, role, handleOption.value), acc)
   }, intoMap<string, readonly string[]>([]))
 
 const buildKindHandleMap = (
@@ -936,7 +966,7 @@ const buildKindHandleMap = (
 ): ReadonlyMap<AstNodeKind, readonly string[]> =>
   [...handleMap.entries()].reduce<ReadonlyMap<AstNodeKind, readonly string[]>>((acc, [handle, mapEntry]) => {
     const key = mapEntry.node.kind
-    const existing = acc.get(key) ?? []
+    const existing = getOrElse<readonly string[]>(() => [])(fromNullable(acc.get(key)))
     return assoc(key, appendReadonly(existing, handle))(acc)
   }, intoMap<AstNodeKind, readonly string[]>([]))
 
@@ -962,6 +992,11 @@ type RuleTargetResolution = { readonly targets: readonly string[]; readonly erro
 
 const uniqueTargets = (targets: readonly string[]): readonly string[] => unique(targets)
 
+const childHandlesOrEmpty = (indexed: IndexedTree, handle: string): readonly string[] => {
+  const nodeOption = fromNullable(indexed.nodes.get(handle))
+  return isNone(nodeOption) ? [] : nodeOption.value.children
+}
+
 const resolveHandleTargets = (
   selector: Extract<StyleSelector, { readonly kind: 'handle' }>,
   handleMap: ReadonlyMap<string, { readonly node: AstOrg['root']; readonly handle: string }>
@@ -982,9 +1017,9 @@ const resolveChildrenTargets = (
   indexed: IndexedTree,
   handleMap: ReadonlyMap<string, { readonly node: AstOrg['root']; readonly handle: string }>
 ): RuleTargetResolution => {
-  const parent = indexed.nodes.get(selector.handle)
-  if (parent !== undefined) {
-    return { targets: parent.children }
+  const parentOption = fromNullable(indexed.nodes.get(selector.handle))
+  if (!isNone(parentOption)) {
+    return { targets: parentOption.value.children }
   }
 
   if (handleMap.has(selector.handle)) {
@@ -1006,8 +1041,10 @@ const resolveRoleChildrenTargets = (
   indexed: IndexedTree,
   roleToHandles: ReadonlyMap<string, readonly string[]>
 ): RuleTargetResolution => ({
-  targets: uniqueTargets((roleToHandles.get(selector.role) ?? [])
-    .flatMap((handle) => indexed.nodes.get(handle)?.children ?? []))
+  targets: uniqueTargets(
+    getOrElse<readonly string[]>(() => [])(fromNullable(roleToHandles.get(selector.role)))
+      .flatMap((handle) => childHandlesOrEmpty(indexed, handle))
+  )
 })
 
 const matchesTypeSelector = (
@@ -1015,10 +1052,11 @@ const matchesTypeSelector = (
   targetType: string
 ): boolean => {
   const typeAttr = mapEntry.node.attrs.find((attr) => attr.key === 'type')
-  return typeAttr !== undefined
-    && 'value' in typeAttr
-    && typeAttr.value.kind === 'string'
-    && typeAttr.value.value.toLowerCase() === targetType
+  const typeAttrOption = fromNullable(typeAttr)
+  return !isNone(typeAttrOption)
+    && 'value' in typeAttrOption.value
+    && typeAttrOption.value.value.kind === 'string'
+    && typeAttrOption.value.value.value.toLowerCase() === targetType
 }
 
 const resolveTypeChildrenTargets = (
@@ -1028,7 +1066,7 @@ const resolveTypeChildrenTargets = (
 ): RuleTargetResolution => ({
   targets: uniqueTargets([...handleMap.entries()].flatMap(([handle, mapEntry]) =>
     matchesTypeSelector(mapEntry, selector.type)
-      ? (indexed.nodes.get(handle)?.children ?? [])
+      ? childHandlesOrEmpty(indexed, handle)
       : []))
 })
 
@@ -1046,8 +1084,10 @@ const resolveNodeKindChildrenTargets = (
   indexed: IndexedTree,
   kindToHandles: ReadonlyMap<AstNodeKind, readonly string[]>
 ): RuleTargetResolution => ({
-  targets: uniqueTargets((kindToHandles.get(selector.nodeKind) ?? [])
-    .flatMap((handle) => indexed.nodes.get(handle)?.children ?? []))
+  targets: uniqueTargets(
+    getOrElse<readonly string[]>(() => [])(fromNullable(kindToHandles.get(selector.nodeKind)))
+      .flatMap((handle) => childHandlesOrEmpty(indexed, handle))
+  )
 })
 
 const resolveRuleTargetsBaseSelector = (
@@ -1068,7 +1108,7 @@ const resolveRuleTargetsBaseSelector = (
     case 'role-children':
       return resolveRoleChildrenTargets(input.selector, input.indexed, input.roleToHandles)
     case 'role':
-      return { targets: input.roleToHandles.get(input.selector.role) ?? [] }
+      return { targets: getOrElse<readonly string[]>(() => [])(fromNullable(input.roleToHandles.get(input.selector.role))) }
     case 'node-name':
     case 'node-title':
       return { targets: [] }
@@ -1093,7 +1133,7 @@ const resolveRuleTargetsBySelector = (input: ResolveRuleTargetsBySelectorInput):
   }
 
   if (input.selector.kind === 'node-kind') {
-    return { targets: input.kindToHandles.get(input.selector.nodeKind) ?? [] }
+    return { targets: getOrElse<readonly string[]>(() => [])(fromNullable(input.kindToHandles.get(input.selector.nodeKind))) }
   }
 
   if (input.selector.kind === 'node-kind-children') {
@@ -1139,11 +1179,11 @@ const resolveValue = (input: ResolveValueInput): string | ResolveError => {
   }
 
   const variableName = trimmed.slice(1)
-  const resolved = input.variables.get(variableName)
-  if (resolved === undefined) {
+  const resolvedOption = fromNullable(input.variables.get(variableName))
+  if (isNone(resolvedOption)) {
     return resolveError(input.line, input.col, `Unknown style variable: $${variableName}`)
   }
-  return resolved.trim()
+  return resolvedOption.value.trim()
 }
 
 type NodeStyleApplier = (
@@ -1154,19 +1194,25 @@ type NodeStyleApplier = (
 
 const parsePxOrUnitlessNumber = (value: string): number | undefined => {
   const match = value.match(/^(\d+(?:\.\d+)?)(?:px)?$/)
-  return match?.[1] === undefined ? undefined : Number(match[1])
+  const matchOption = fromNullable(match)
+  if (isNone(matchOption)) {
+    return undefined
+  }
+
+  const groupOption = fromNullable(matchOption.value[1])
+  return isNone(groupOption) ? undefined : Number(groupOption.value)
 }
 
 const MAX_ICON_STACK = 5
 
 const applyFontSize: NodeStyleApplier = (current, resolvedValue, declaration) => {
   const size = parsePxOrUnitlessNumber(resolvedValue)
-  if (size === undefined) {
+  if (isNone(fromNullable(size))) {
     return resolveError(declaration.line, declaration.col, `Invalid font-size value: ${resolvedValue}`)
   }
   return {
     ...current,
-    fontSize: size
+    fontSize: getOrElse<number>(() => 0)(fromNullable(size))
   }
 }
 
@@ -1186,12 +1232,13 @@ const applyFontWeight: NodeStyleApplier = (current, resolvedValue, declaration) 
 
 const applyLineSpacing: NodeStyleApplier = (current, resolvedValue, declaration) => {
   const spacing = parsePxOrUnitlessNumber(resolvedValue)
-  if (spacing === undefined || spacing < 0.5) {
+  const spacingOption = fromNullable(spacing)
+  if (isNone(spacingOption) || spacingOption.value < 0.5) {
     return resolveError(declaration.line, declaration.col, `Invalid line-spacing value: ${resolvedValue} (must be >= 0.5)`)
   }
   return {
     ...current,
-    lineSpacing: spacing
+    lineSpacing: spacingOption.value
   }
 }
 
@@ -1219,13 +1266,14 @@ const applyBorderStyle: NodeStyleApplier = (current, resolvedValue, declaration)
 
 const applyBorderWidth: NodeStyleApplier = (current, resolvedValue, declaration) => {
   const width = parsePxOrUnitlessNumber(resolvedValue)
-  if (width === undefined) {
+  const widthOption = fromNullable(width)
+  if (isNone(widthOption)) {
     return resolveError(declaration.line, declaration.col, `Invalid border-width value: ${resolvedValue}`)
   }
 
   return {
     ...current,
-    borderWidth: width
+    borderWidth: widthOption.value
   }
 }
 
@@ -1243,13 +1291,14 @@ const applyEdgeStyle: NodeStyleApplier = (current, resolvedValue, declaration) =
 
 const applyEdgeWidth: NodeStyleApplier = (current, resolvedValue, declaration) => {
   const width = parsePxOrUnitlessNumber(resolvedValue)
-  if (width === undefined) {
+  const widthOption = fromNullable(width)
+  if (isNone(widthOption)) {
     return resolveError(declaration.line, declaration.col, `Invalid edge-width value: ${resolvedValue}`)
   }
 
   return {
     ...current,
-    edgeWidth: width
+    edgeWidth: widthOption.value
   }
 }
 
@@ -1262,8 +1311,9 @@ const applyIcon: NodeStyleApplier = (current, resolvedValue, declaration) => {
     return resolveError(declaration.line, declaration.col, `icon: maximum ${MAX_ICON_STACK} icons allowed, got ${names.length}`)
   }
   const unknownName = names.find((n) => !isKnownIcon(n))
-  if (unknownName !== undefined) {
-    return resolveError(declaration.line, declaration.col, `Unknown icon: ${unknownName}`)
+  const unknownNameOption = fromNullable(unknownName)
+  if (!isNone(unknownNameOption)) {
+    return resolveError(declaration.line, declaration.col, `Unknown icon: ${unknownNameOption.value}`)
   }
   return {
     ...current,
@@ -1288,25 +1338,28 @@ const applyIconPos: NodeStyleApplier = (current, resolvedValue, declaration) => 
 
 const applyIconSize: NodeStyleApplier = (current, resolvedValue, declaration) => {
   const size = parsePxOrUnitlessNumber(resolvedValue)
-  if (size === undefined) {
+  const sizeOption = fromNullable(size)
+  if (isNone(sizeOption)) {
     return resolveError(declaration.line, declaration.col, `Invalid icon-size value: ${resolvedValue}`)
   }
-  if (size <= 0) {
+  if (sizeOption.value <= 0) {
     return resolveError(declaration.line, declaration.col, `icon-size must be positive: ${resolvedValue}`)
   }
   return {
     ...current,
-    iconSize: Math.round(size)
+    iconSize: Math.round(sizeOption.value)
   }
 }
 
 const applyIconOpacity: NodeStyleApplier = (current, resolvedValue, declaration) => {
   const opacityMatch = resolvedValue.match(/^(\d+(?:\.\d+)?)(?:%)?$/)
-  if (opacityMatch?.[1] === undefined) {
+  const opacityMatchOption = fromNullable(opacityMatch)
+  const opacityGroupOption = isNone(opacityMatchOption) ? fromNullable<string>(undefined) : fromNullable(opacityMatchOption.value[1])
+  if (isNone(opacityGroupOption)) {
     return resolveError(declaration.line, declaration.col, `Invalid icon-opacity value: ${resolvedValue}`)
   }
 
-  const rawOpacity = Number(opacityMatch[1])
+  const rawOpacity = Number(opacityGroupOption.value)
   const opacity = resolvedValue.includes('%') ? rawOpacity / 100 : rawOpacity
 
   if (opacity < 0 || opacity > 1) {
@@ -1358,10 +1411,11 @@ const applyDeclaration = (
   }
 
   const applier = nodeStyleAppliers[declaration.property]
-  if (applier === undefined) {
+  const applierOption = fromNullable(applier)
+  if (isNone(applierOption)) {
     return resolveError(declaration.line, declaration.col, `Internal error: unsupported style property: ${declaration.property}`)
   }
-  return applier(current, resolved, declaration)
+  return applierOption.value(current, resolved, declaration)
 }
 
 const applyTextDeclaration = (
@@ -1382,11 +1436,16 @@ const applyTextDeclaration = (
     return applied
   }
 
+  const colorOption = fromNullable(applied.color)
+  const fontSizeOption = fromNullable(applied.fontSize)
+  const fontWeightOption = fromNullable(applied.fontWeight)
+  const lineSpacingOption = fromNullable(applied.lineSpacing)
+
   return {
-    ...(applied.color !== undefined ? { color: applied.color } : {}),
-    ...(applied.fontSize !== undefined ? { fontSize: applied.fontSize } : {}),
-    ...(applied.fontWeight !== undefined ? { fontWeight: applied.fontWeight } : {}),
-    ...(applied.lineSpacing !== undefined ? { lineSpacing: applied.lineSpacing } : {})
+    ...(isNone(colorOption) ? {} : { color: colorOption.value }),
+    ...(isNone(fontSizeOption) ? {} : { fontSize: fontSizeOption.value }),
+    ...(isNone(fontWeightOption) ? {} : { fontWeight: fontWeightOption.value }),
+    ...(isNone(lineSpacingOption) ? {} : { lineSpacing: lineSpacingOption.value })
   }
 }
 
@@ -1492,7 +1551,7 @@ const applyNodeRuleTargets = (
   }
 ): { readonly styles: ReadonlyMap<string, ResolvedNodeStyle>; readonly errors: readonly ResolveError[] } =>
   input.targets.reduce<{ readonly styles: ReadonlyMap<string, ResolvedNodeStyle>; readonly errors: readonly ResolveError[] }>((styleAcc, target) => {
-    const currentStyle = styleAcc.styles.get(target) ?? {}
+    const currentStyle = getOrElse<ResolvedNodeStyle>(() => ({}))(fromNullable(styleAcc.styles.get(target)))
     const applied = applyDeclarations({
       initialStyle: currentStyle,
       declarations: input.declarations,
@@ -1521,10 +1580,11 @@ const applyNodeRule = (
     roleToHandles: input.context.roleToHandles,
     kindToHandles: input.context.kindToHandles
   })
-  if (targetResolution.error !== undefined) {
+  const targetErrorOption = fromNullable(targetResolution.error)
+  if (!isNone(targetErrorOption)) {
     return {
       ...input.state,
-      errors: [...input.state.errors, targetResolution.error]
+      errors: [...input.state.errors, targetErrorOption.value]
     }
   }
 
@@ -1568,7 +1628,8 @@ const deriveVariableIcons = (
 ): ReadonlyMap<string, ResolvedNodeStyle> =>
   [...handleMap.entries()].reduce<ReadonlyMap<string, ResolvedNodeStyle>>((acc, [handle, mapEntry]) => {
     const current = acc.get(handle)
-    if (current?.icon !== undefined) {
+    const currentOption = fromNullable(current)
+    if (!isNone(currentOption) && !isNone(fromNullable(currentOption.value.icon))) {
       return acc
     }
 
@@ -1584,5 +1645,5 @@ const deriveVariableIcons = (
 
     return derived.length === 0
       ? acc
-      : intoMap([...entriesOfMap(acc), [handle, { ...(current ?? {}), icon: [...derived] }] as const])
+      : intoMap([...entriesOfMap(acc), [handle, { ...getOrElse<ResolvedNodeStyle>(() => ({}))(fromNullable(current)), icon: [...derived] }] as const])
   }, intoMap(entriesOfMap(styles)))

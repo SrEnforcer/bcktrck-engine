@@ -1,3 +1,5 @@
+import { fromNullable, isNone } from '@tsfpp/prelude'
+
 /**
  * Style/defs block extraction helpers.
  *
@@ -16,7 +18,13 @@ export type BlockLine = {
 
 const leadingIndent = (line: string): number => {
   const match = line.match(/^[ \t]*/)
-  return match?.[0]?.length ?? 0
+  const matchOption = fromNullable(match)
+  if (isNone(matchOption)) {
+    return 0
+  }
+
+  const firstSegmentOption = fromNullable(matchOption.value[0])
+  return isNone(firstSegmentOption) ? 0 : firstSegmentOption.value.length
 }
 
 /**

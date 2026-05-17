@@ -102,57 +102,55 @@ const renderStaffConnectorSide = (
 ): SectionRender =>
   input.staffIds.reduce<SectionRender>((nextSideState, staffId) => {
     const staffPos = input.staffById[staffId]
-    if (staffPos === undefined) {
-      return nextSideState
-    }
+    if (staffPos !== undefined) {
+      const staffX = staffPos.x * input.cfg.colWidth
+      const staffW = input.cfg.staffSize * input.cfg.colWidth
+      const x1 = input.isLeft ? input.parentX : input.parentX + input.nodeW
+      const x2 = input.isLeft ? staffX + staffW : staffX
+      const rendered = renderOneStaffConnector({ x1, x2, y: input.parentCy, safeCfg: input.safeCfg })
 
-    const staffX = staffPos.x * input.cfg.colWidth
-    const staffW = input.cfg.staffSize * input.cfg.colWidth
-    const x1 = input.isLeft ? input.parentX : input.parentX + input.nodeW
-    const x2 = input.isLeft ? staffX + staffW : staffX
-    const rendered = renderOneStaffConnector({ x1, x2, y: input.parentCy, safeCfg: input.safeCfg })
-
-    return {
-      elements: [...nextSideState.elements, rendered.element],
-      bounds: mergeRenderBounds(nextSideState.bounds, rendered.bounds)
+      return {
+        elements: [...nextSideState.elements, rendered.element],
+        bounds: mergeRenderBounds(nextSideState.bounds, rendered.bounds)
+      }
     }
+    return nextSideState
   }, input.sideState)
 
 const renderStaffConnectorsForParent = (
   input: RenderStaffConnectorsForParentInput
 ): SectionRender => {
   const parentPos = input.placed.positions.get(input.parentId)
-  if (parentPos === undefined) {
-    return input.state
+  if (parentPos !== undefined) {
+    const nodeW = input.cfg.nodeSize * input.cfg.colWidth
+    const nodeH = input.cfg.nodeSize * input.cfg.rowHeight
+    const parentX = parentPos.x * input.cfg.colWidth
+    const parentY = parentPos.y * input.cfg.rowHeight
+    const parentCy = parentY + nodeH / 2
+    const leftState = renderStaffConnectorSide({
+      staffIds: input.node.staffLeft,
+      isLeft: true,
+      parentX,
+      parentCy,
+      nodeW,
+      cfg: input.cfg,
+      safeCfg: input.safeCfg,
+      staffById: input.staffById,
+      sideState: input.state
+    })
+    return renderStaffConnectorSide({
+      staffIds: input.node.staffRight,
+      isLeft: false,
+      parentX,
+      parentCy,
+      nodeW,
+      cfg: input.cfg,
+      safeCfg: input.safeCfg,
+      staffById: input.staffById,
+      sideState: leftState
+    })
   }
-
-  const nodeW = input.cfg.nodeSize * input.cfg.colWidth
-  const nodeH = input.cfg.nodeSize * input.cfg.rowHeight
-  const parentX = parentPos.x * input.cfg.colWidth
-  const parentY = parentPos.y * input.cfg.rowHeight
-  const parentCy = parentY + nodeH / 2
-  const leftState = renderStaffConnectorSide({
-    staffIds: input.node.staffLeft,
-    isLeft: true,
-    parentX,
-    parentCy,
-    nodeW,
-    cfg: input.cfg,
-    safeCfg: input.safeCfg,
-    staffById: input.staffById,
-    sideState: input.state
-  })
-  return renderStaffConnectorSide({
-    staffIds: input.node.staffRight,
-    isLeft: false,
-    parentX,
-    parentCy,
-    nodeW,
-    cfg: input.cfg,
-    safeCfg: input.safeCfg,
-    staffById: input.staffById,
-    sideState: leftState
-  })
+  return input.state
 }
 
 /** Builds SVG elements for all staff connector lines in the tree. */
@@ -187,7 +185,8 @@ const renderRoutedSolidEdges = (
   }
 
   const pointsAttr = pixels.map((pt) => `${pt.x},${pt.y}`).join(' ')
-  const element = `<polyline class="edge" points="${pointsAttr}" fill="none" stroke="${input.safeCfg.edgeStroke}"${strokeWidthAttr(route.edgeWidth ?? 2)}${edgeStrokeStyleAttrs(route.edgeStyle)} />`
+  const edgeWidth = route.edgeWidth !== undefined ? route.edgeWidth : 2
+  const element = `<polyline class="edge" points="${pointsAttr}" fill="none" stroke="${input.safeCfg.edgeStroke}"${strokeWidthAttr(edgeWidth)}${edgeStrokeStyleAttrs(route.edgeStyle)} />`
   return {
     elements: [...state.elements, element],
     bounds: expandBoundsWithPoints(state.bounds, pixels)
@@ -198,35 +197,34 @@ const renderFallbackSolidEdges = (
   input: RenderFallbackSolidEdgesInput
 ): SectionRender => Array.from(input.tree.nodes.entries()).reduce<SectionRender>((state, [nodeId, node]) => {
   const parentPos = input.placed.positions.get(nodeId)
-  if (parentPos === undefined || node.children.length === 0) {
-    return state
-  }
+  if (parentPos !== undefined && node.children.length > 0) {
+    const parentPixels = gridToPixels(parentPos.x, parentPos.y, input.cfg)
+    return node.children.reduce<SectionRender>((childState, childId) => {
+      const childNode = input.tree.nodes.get(childId)
+      const childPos = input.placed.positions.get(childId)
+      if (childNode !== undefined && childPos !== undefined && !input.staffShadowIds.has(childId)) {
+        const childPixels = gridToPixels(childPos.x, childPos.y, input.cfg)
+        const x1 = parentPixels.x + (input.cfg.nodeSize * input.cfg.colWidth) / 2
+        const y1 = parentPixels.y + input.cfg.nodeSize * input.cfg.rowHeight
+        const x2 = childPixels.x + (input.cfg.nodeSize * input.cfg.colWidth) / 2
+        const y2 = childPixels.y
+        const edgeStyle = input.styleMap.get(childId)?.edgeStyle
+        const widthValue = input.styleMap.get(childId)?.edgeWidth
+        const edgeWidth = widthValue !== undefined ? widthValue : 2
+        const element = `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${input.safeCfg.edgeStroke}"${strokeWidthAttr(edgeWidth)}${edgeStrokeStyleAttrs(edgeStyle)} />`
 
-  const parentPixels = gridToPixels(parentPos.x, parentPos.y, input.cfg)
-  return node.children.reduce<SectionRender>((childState, childId) => {
-    const childNode = input.tree.nodes.get(childId)
-    const childPos = input.placed.positions.get(childId)
-    if (childNode === undefined || childPos === undefined || input.staffShadowIds.has(childId)) {
+        return {
+          elements: [...childState.elements, element],
+          bounds: mergeRenderBounds(
+            childState.bounds,
+            boundsFromRect({ x: childPixels.x, y: childPixels.y, w: input.cfg.nodeSize * input.cfg.colWidth, h: input.cfg.nodeSize * input.cfg.rowHeight })
+          )
+        }
+      }
       return childState
-    }
-
-    const childPixels = gridToPixels(childPos.x, childPos.y, input.cfg)
-    const x1 = parentPixels.x + (input.cfg.nodeSize * input.cfg.colWidth) / 2
-    const y1 = parentPixels.y + input.cfg.nodeSize * input.cfg.rowHeight
-    const x2 = childPixels.x + (input.cfg.nodeSize * input.cfg.colWidth) / 2
-    const y2 = childPixels.y
-    const edgeStyle = input.styleMap.get(childId)?.edgeStyle
-    const edgeWidth = input.styleMap.get(childId)?.edgeWidth
-    const element = `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${input.safeCfg.edgeStroke}"${strokeWidthAttr(edgeWidth ?? 2)}${edgeStrokeStyleAttrs(edgeStyle)} />`
-
-    return {
-      elements: [...childState.elements, element],
-      bounds: mergeRenderBounds(
-        childState.bounds,
-        boundsFromRect({ x: childPixels.x, y: childPixels.y, w: input.cfg.nodeSize * input.cfg.colWidth, h: input.cfg.nodeSize * input.cfg.rowHeight })
-      )
-    }
-  }, state)
+    }, state)
+  }
+  return state
 }, { elements: [], bounds: emptyRenderBounds() })
 
 /** Builds SVG polyline/line elements for all solid (non-dotted) edges. */

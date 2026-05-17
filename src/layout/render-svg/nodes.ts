@@ -7,6 +7,7 @@
 /* eslint-disable max-lines */
 // DEVIATION(2.4): This module remains temporarily large during incremental migration and will be split into focused files in a follow-up slice.
 
+import { fromNullable, getOrElse, isNone, pipe } from '@tsfpp/prelude'
 import type { IconSpec } from '../../icons/render'
 import type { ResolvedNodeStyle, ResolvedStyleMap, ResolvedTextStyles } from '../../style/dsl'
 import type { IndexedTree, PlacedTree, PlacedStaff, RenderConfig } from '../types'
@@ -39,16 +40,29 @@ type RenderOptionalIconElementParams = {
 
 const renderOptionalIconElement = (params: RenderOptionalIconElementParams): string | undefined => {
   const { iconSpecs, x, y, w, h, style, cfg } = params
-  return iconSpecs !== undefined && iconSpecs.length > 0
-    ? renderNodeIcons({
-        specs: iconSpecs,
-        bounds: { x, y, width: w, height: h },
-        color: style?.iconColor ?? style?.borderColor ?? cfg.nodeBorder
-      })
-    : undefined
+  const iconSpecsOption = fromNullable(iconSpecs)
+  if (isNone(iconSpecsOption) || iconSpecsOption.value.length === 0) {
+    return undefined
+  }
+  const color = pipe(
+    fromNullable(style?.iconColor),
+    getOrElse(() => pipe(
+      fromNullable(style?.borderColor),
+      getOrElse(() => cfg.nodeBorder)
+    ))
+  )
+
+  return renderNodeIcons({
+    specs: iconSpecsOption.value,
+    bounds: { x, y, width: w, height: h },
+    color
+  })
 }
 
-const optionalElement = (value: string | undefined): readonly string[] => (value === undefined ? [] : [value])
+const optionalElement = (value: string | undefined): readonly string[] => {
+  const valueOption = fromNullable(value)
+  return isNone(valueOption) ? [] : [valueOption.value]
+}
 
 type Corner = 'upper-left' | 'upper-right' | 'bottom-left' | 'bottom-right'
 
@@ -65,36 +79,45 @@ const isNearWhiteColor = (value: string): boolean => {
 }
 
 const subordinateBadgeCorner = (iconSpecs: readonly IconSpec[] | undefined): Corner => {
-  const first = iconSpecs?.[0]
-  if (iconSpecs !== undefined && iconSpecs.length > 1) {
+  const iconSpecsOption = fromNullable(iconSpecs)
+  if (isNone(iconSpecsOption)) {
     return 'bottom-right'
   }
-  if (first === undefined) {
+  if (iconSpecsOption.value.length > 1) {
     return 'bottom-right'
   }
-  return first.pos
+  const firstOption = fromNullable(iconSpecsOption.value[0])
+  if (isNone(firstOption)) {
+    return 'bottom-right'
+  }
+  return firstOption.value.pos
 }
 
 const iconBlockWidthAtCorner = (
   iconSpecs: readonly IconSpec[] | undefined,
   corner: Corner
 ): number => {
-  if (iconSpecs === undefined || iconSpecs.length === 0) {
+  const iconSpecsOption = fromNullable(iconSpecs)
+  if (isNone(iconSpecsOption) || iconSpecsOption.value.length === 0) {
     return 0
   }
+  const safeIconSpecs = iconSpecsOption.value
 
-  if (iconSpecs.length === 1) {
-    const first = iconSpecs[0]
-    return first !== undefined && first.pos === corner ? first.size : 0
+  if (safeIconSpecs.length === 1) {
+    const firstOption = fromNullable(safeIconSpecs[0])
+    if (isNone(firstOption)) {
+      return 0
+    }
+    return firstOption.value.pos === corner ? firstOption.value.size : 0
   }
 
   if (corner !== 'bottom-right') {
     return 0
   }
 
-  const iconWidths = iconSpecs.map((spec) => spec.size)
+  const iconWidths = safeIconSpecs.map((spec) => spec.size)
   const totalIconWidth = iconWidths.reduce((sum, width) => sum + width, 0)
-  const totalGapWidth = ICON_STACK_GAP * Math.max(0, iconSpecs.length - 1)
+  const totalGapWidth = ICON_STACK_GAP * Math.max(0, safeIconSpecs.length - 1)
   return totalIconWidth + totalGapWidth
 }
 
@@ -117,13 +140,15 @@ const flattenDepartmentChildren = (
 ): readonly DirectSubordinateCandidate[] =>
   childIds.reduce<readonly DirectSubordinateCandidate[]>((entries, childId) => {
     const child = tree.nodes.get(childId)
-    if (child === undefined) {
+    const childOption = fromNullable(child)
+    if (isNone(childOption)) {
       return entries
     }
+    const safeChild = childOption.value
 
-    return child.kind === 'department'
-      ? [...entries, ...flattenDepartmentChildren(child.children, tree, shadowIds)]
-      : [...entries, { kind: child.kind, isShadow: shadowIds.has(childId) }]
+    return safeChild.kind === 'department'
+      ? [...entries, ...flattenDepartmentChildren(safeChild.children, tree, shadowIds)]
+      : [...entries, { kind: safeChild.kind, isShadow: shadowIds.has(childId) }]
   }, [])
 
 const staffDirectCandidates = (
@@ -482,26 +507,40 @@ const resolveNodeRenderStyleContext = (input: ResolveNodeRenderStyleContextInput
   const style = input.styleMap.get(input.nodeId)
   const fill = style?.backgroundColor !== undefined ? escapeXml(style.backgroundColor) : getFillColor(input.nodeKind, input.safeCfg)
   const stroke = style?.borderColor !== undefined ? escapeXml(style.borderColor) : input.safeCfg.nodeBorder
+  const textFontSize = pipe(
+    fromNullable(toTextStyle(style).fontSize),
+    getOrElse(() => input.cfg.fontSize)
+  )
   return {
     style,
     fill,
     strokeAttr: style?.borderStyle === 'none' ? '' : ` stroke="${stroke}"`,
     baseTextStyle: toTextStyle(style),
-    textFontSize: toTextStyle(style).fontSize ?? input.cfg.fontSize
+    textFontSize
   }
 }
 
 const resolveStaffRenderStyleContext = (input: ResolveStaffRenderStyleContextInput): NodeRenderStyleContext => {
   const parentId = input.staffParentLookup[input.staffNodeId]
-  const style = input.styleMap.get(input.staffNodeId) ?? (parentId !== undefined ? input.styleMap.get(parentId) : undefined)
+  const style = pipe(
+    fromNullable(input.styleMap.get(input.staffNodeId)),
+    getOrElse(() => {
+      const parentIdOption = fromNullable(parentId)
+      return isNone(parentIdOption) ? undefined : input.styleMap.get(parentIdOption.value)
+    })
+  )
   const fill = style?.backgroundColor !== undefined ? escapeXml(style.backgroundColor) : input.safeCfg.employeeFill
   const stroke = style?.borderColor !== undefined ? escapeXml(style.borderColor) : input.safeCfg.nodeBorder
+  const textFontSize = pipe(
+    fromNullable(toTextStyle(style).fontSize),
+    getOrElse(() => input.cfg.fontSize)
+  )
   return {
     style,
     fill,
     strokeAttr: style?.borderStyle === 'none' ? '' : ` stroke="${stroke}"`,
     baseTextStyle: toTextStyle(style),
-    textFontSize: toTextStyle(style).fontSize ?? input.cfg.fontSize
+    textFontSize
   }
 }
 
@@ -544,7 +583,8 @@ const trianglePointsForCorner = (input: TrianglePointsForCornerInput): string =>
 }
 
 const renderTriangleElement = (input: RenderTriangleElementInput): string | undefined => {
-  if (input.triangleEffect?.color === undefined) {
+  const colorOption = fromNullable(input.triangleEffect?.color)
+  if (isNone(colorOption)) {
     return undefined
   }
 
@@ -555,11 +595,11 @@ const renderTriangleElement = (input: RenderTriangleElementInput): string | unde
   const size = Math.max(12, Math.min(input.w, input.h) * 0.18)
   const triOffset = 3
   const points = trianglePointsForCorner({ corner, x: input.x, y: input.y, w: input.w, h: input.h, size, triOffset })
-  return `<polygon points="${points}" fill="${escapeXml(input.triangleEffect.color)}" />`
+  return `<polygon points="${points}" fill="${escapeXml(colorOption.value)}" />`
 }
 
 const buildSingleNodeBodyElements = (input: BuildSingleNodeBodyElementsInput): readonly string[] => [
-  `<rect id="${escapeXml(input.nodeId)}" class="node" x="${input.p.x}" y="${input.p.y}" width="${input.w}" height="${input.h}" fill="${input.renderStyle.fill}"${input.renderStyle.strokeAttr}${strokeWidthAttr(input.renderStyle.style?.borderWidth ?? 2)}${rectStrokeStyleAttrs(input.renderStyle.style)} />`,
+  `<rect id="${escapeXml(input.nodeId)}" class="node" x="${input.p.x}" y="${input.p.y}" width="${input.w}" height="${input.h}" fill="${input.renderStyle.fill}"${input.renderStyle.strokeAttr}${strokeWidthAttr(pipe(fromNullable(input.renderStyle.style?.borderWidth), getOrElse(() => 2)))}${rectStrokeStyleAttrs(input.renderStyle.style)} />`,
   ...optionalElement(input.triangleElement),
   ...optionalElement(input.iconElement),
   ...optionalElement(input.subordinateBadge),
@@ -713,10 +753,11 @@ const renderSingleNodeBody = (input: RenderSingleNodeBodyInput): SectionRender =
     return { elements: [], bounds: emptyRenderBounds() }
   }
 
-  const pos = input.placed.positions.get(input.nodeId)
-  if (pos === undefined) {
+  const posOption = fromNullable(input.placed.positions.get(input.nodeId))
+  if (isNone(posOption)) {
     return { elements: [], bounds: emptyRenderBounds() }
   }
+  const pos = posOption.value
 
   return renderSingleNodeBodyAtPosition({
     tree: input.tree,
@@ -782,7 +823,7 @@ const renderSingleStaffBodyAtPosition = (input: RenderSingleStaffBodyAtPositionI
 
   return {
     elements: [
-      `<rect id="${escapeXml(input.staffNode.id)}" class="staff" x="${input.p.x}" y="${input.p.y}" width="${w}" height="${h}" fill="${renderStyle.fill}"${renderStyle.strokeAttr}${strokeWidthAttr(renderStyle.style?.borderWidth ?? 1)} opacity="0.7"${rectStrokeStyleAttrs(renderStyle.style)} />`,
+      `<rect id="${escapeXml(input.staffNode.id)}" class="staff" x="${input.p.x}" y="${input.p.y}" width="${w}" height="${h}" fill="${renderStyle.fill}"${renderStyle.strokeAttr}${strokeWidthAttr(pipe(fromNullable(renderStyle.style?.borderWidth), getOrElse(() => 1)))} opacity="0.7"${rectStrokeStyleAttrs(renderStyle.style)} />`,
       ...optionalElement(iconElement),
       labelElement
     ],

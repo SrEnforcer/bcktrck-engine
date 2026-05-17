@@ -1,4 +1,12 @@
 /**
+ * @module compile
+ *
+ * Compose the full BTL-to-SVG pipeline from parsing through rendering.
+ *
+ * @packageDocumentation
+ */
+
+/**
  * PURE CORE — no side-effects; all I/O enters via parameters.
  *
  * Composes the full BTL-to-SVG pipeline. This module is the narrow orchestration
@@ -10,7 +18,7 @@
 /* eslint-disable max-lines */
 
 import type { Option } from '@tsfpp/prelude'
-import { isNone, some } from '@tsfpp/prelude'
+import { fromNullable, getOrElse, intoMap, isNone, isSome, none, some } from '@tsfpp/prelude'
 import { parseAndResolveBtl } from './parse-and-resolve'
 import { isolateSubtree, isolateSubtrees, listSubtrees } from './subtree'
 import { indexTree } from './layout/index-tree'
@@ -50,9 +58,7 @@ export type CompileErr = {
  */
 export type CompileResult = CompileOk | CompileErr
 
-// DEVIATION(1.9): Immutable map construction is required to return fresh map values without mutating source maps.
-// eslint-disable-next-line no-restricted-syntax
-const mapFromEntries = <K, V>(entries: ReadonlyArray<readonly [K, V]>): ReadonlyMap<K, V> => new Map(entries)
+const mapFromEntries = <K, V>(entries: ReadonlyArray<readonly [K, V]>): ReadonlyMap<K, V> => intoMap(entries)
 
 const mapEntries = <K, V>(map: ReadonlyMap<K, V>): ReadonlyArray<readonly [K, V]> =>
   Array.from(map.entries()).map(([key, value]) => [key, value] as const)
@@ -100,6 +106,23 @@ export type CompileOptions = {
   readonly subtreeIds?: readonly string[]
 }
 
+const mergeOptionalStyleSource = (
+  base: ReturnType<typeof applyDefinitionsToStyleSheet>,
+  styleSource: string | undefined
+): Option<ReturnType<typeof applyDefinitionsToStyleSheet>> => {
+  const styleSourceOption = fromNullable(styleSource)
+  if (isNone(styleSourceOption)) {
+    return some(base)
+  }
+
+  const supplementalStyleSheet = parseSupplementalStyleSource(styleSourceOption.value)
+  if (!supplementalStyleSheet.ok) {
+    return none
+  }
+
+  return some(mergeStyleSheets(base, supplementalStyleSheet.styleSheet))
+}
+
 /**
  * List selectable subtree entries directly from full BTL source.
  *
@@ -116,23 +139,18 @@ export const listSubtreesFromSource = (
   const sourceStyle = extractSourceStyle(source, options.ignoreSourceStyle === true)
   if (!sourceStyle.ok) return []
 
-  const supplementalStyleSheet = options.styleSource === undefined
-    ? undefined
-    : parseSupplementalStyleSource(options.styleSource)
+  const mergedStyleSheetOption = mergeOptionalStyleSource(sourceStyle.sourceStyleSheet, options.styleSource)
+  if (isNone(mergedStyleSheetOption)) return []
+  const safeMergedStyleSheet = mergedStyleSheetOption.value
 
-  if (supplementalStyleSheet !== undefined && !supplementalStyleSheet.ok) return []
-
-  const mergedStyleSheet = supplementalStyleSheet === undefined
-    ? sourceStyle.sourceStyleSheet
-    : mergeStyleSheets(sourceStyle.sourceStyleSheet, supplementalStyleSheet.styleSheet)
-
-  const effectiveVariables = options.variables === undefined
-    ? mergedStyleSheet.variables
-    : mergeMaps(mergedStyleSheet.variables, options.variables)
+  const variablesOption = fromNullable(options.variables)
+  const effectiveVariables = isNone(variablesOption)
+    ? safeMergedStyleSheet.variables
+    : mergeMaps(safeMergedStyleSheet.variables, variablesOption.value)
 
   const parsed = parseAndResolveBtl(sourceStyle.strippedSource, {
     variables: effectiveVariables,
-    variableIcons: mergedStyleSheet.variableIcons
+    variableIcons: safeMergedStyleSheet.variableIcons
   })
 
   return parsed.ok ? listSubtrees(parsed.tree) : []
@@ -163,8 +181,9 @@ const parseSupplementalStyleSource = (
     return styleExtraction
   }
 
-  const leftover = firstNonBlockLine(styleExtraction.strippedSource)
-  if (leftover !== undefined) {
+  const leftoverOption = fromNullable(firstNonBlockLine(styleExtraction.strippedSource))
+  if (isSome(leftoverOption)) {
+    const leftover = leftoverOption.value
     return {
       ok: false,
       error: {
@@ -194,18 +213,19 @@ const mergeIconMaps = (
 ): ReadonlyMap<string, readonly IconSpec[]> => mergeMaps(left, right)
 
 const iconMapForNonDepartment = (node: Exclude<OrgNode, Extract<OrgNode, { readonly kind: 'department' }>>): ReadonlyMap<string, readonly IconSpec[]> =>
-  node.meta.icon === undefined
+  isNone(fromNullable(node.meta.icon))
     ? mapFromEntries<string, readonly IconSpec[]>([])
     : mapFromEntries<string, readonly IconSpec[]>([
         [
+          // DEVIATION(1.6): Serialization boundary requires unwrapping branded NodeId to a plain string key.
           // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- branded NodeId unwrap at serialization boundary for icon map keys.
           node.id as string,
           [
             {
-              name: node.meta.icon,
-              pos: node.meta.iconPos ?? 'upper-left',
-              size: node.meta.iconSize ?? 14,
-              opacity: node.meta.iconOpacity ?? 0.3
+              name: getOrElse<string>(() => '')(fromNullable(node.meta.icon)),
+              pos: getOrElse<IconSpec['pos']>(() => 'upper-left')(fromNullable(node.meta.iconPos)),
+              size: getOrElse<number>(() => 14)(fromNullable(node.meta.iconSize)),
+              opacity: getOrElse<number>(() => 0.3)(fromNullable(node.meta.iconOpacity))
             }
           ]
         ]
@@ -250,21 +270,25 @@ const applyStyleToIcons = (
   style: ResolvedNodeStyle,
   existing: readonly IconSpec[] | undefined
 ): readonly IconSpec[] | undefined => {
-  if (style.icon !== undefined && style.icon.length > 0) {
-    const pos = style.icon.length === 1 ? (style.iconPos ?? 'upper-left') : 'upper-left'
-    return style.icon.map((name) => ({
+  const styleIconOption = fromNullable(style.icon)
+  if (!isNone(styleIconOption) && styleIconOption.value.length > 0) {
+    const pos = styleIconOption.value.length === 1
+      ? getOrElse<IconSpec['pos']>(() => 'upper-left')(fromNullable(style.iconPos))
+      : 'upper-left'
+    return styleIconOption.value.map((name) => ({
       name,
       pos,
-      size: style.iconSize ?? 14,
-      opacity: style.iconOpacity ?? 0.3
+      size: getOrElse<number>(() => 14)(fromNullable(style.iconSize)),
+      opacity: getOrElse<number>(() => 0.3)(fromNullable(style.iconOpacity))
     }))
   }
-  if (existing !== undefined) {
-    return existing.map((spec) => ({
+  const existingOption = fromNullable(existing)
+  if (!isNone(existingOption)) {
+    return existingOption.value.map((spec) => ({
       name: spec.name,
-      pos: style.iconPos ?? spec.pos,
-      size: style.iconSize ?? spec.size,
-      opacity: style.iconOpacity ?? spec.opacity ?? 0.3
+      pos: getOrElse<IconSpec['pos']>(() => spec.pos)(fromNullable(style.iconPos)),
+      size: getOrElse<number>(() => spec.size)(fromNullable(style.iconSize)),
+      opacity: getOrElse<number>(() => getOrElse<number>(() => 0.3)(fromNullable(spec.opacity)))(fromNullable(style.iconOpacity))
     }))
   }
   return undefined
@@ -275,11 +299,14 @@ const buildIconMap = (
   styleMap: ReadonlyMap<string, ResolvedNodeStyle> | undefined
 ): ReadonlyMap<string, readonly IconSpec[]> => {
   const base = collectIconsFromNode(tree.root)
-  const effectiveStyleMap = styleMap ?? mapFromEntries<string, ResolvedNodeStyle>([])
+  const effectiveStyleMap = getOrElse<ReadonlyMap<string, ResolvedNodeStyle>>(() => mapFromEntries<string, ResolvedNodeStyle>([]))(fromNullable(styleMap))
   return Array.from(effectiveStyleMap.entries()).reduce<ReadonlyMap<string, readonly IconSpec[]>>(
     (acc, [nodeId, style]) => {
       const updated = applyStyleToIcons(style, acc.get(nodeId))
-      return updated !== undefined ? mapFromEntries([...mapEntries(acc), [nodeId, updated] as const]) : acc
+      const updatedOption = fromNullable(updated)
+      return isNone(updatedOption)
+        ? acc
+        : mapFromEntries([...mapEntries(acc), [nodeId, updatedOption.value] as const])
     },
     mapFromEntries(mapEntries(base))
   )
@@ -304,12 +331,14 @@ const routeDiagnosticsToErrors = (
 ): readonly ResolveError[] =>
   diagnostics.map((diag) => ({
     kind: 'invalid_attr_value' as const,
-    handle: diag.kind === 'missing_parent_position' ? diag.parentId : diag.childId ?? diag.parentId,
+    handle: diag.kind === 'missing_parent_position'
+      ? diag.parentId
+      : getOrElse<string>(() => diag.parentId)(fromNullable(diag.childId)),
     line: 0,
     col: 0,
     message: diag.kind === 'missing_parent_position'
       ? `Cannot route edges: missing parent position '${diag.parentId}'`
-      : `Cannot route edges: missing child position '${diag.childId ?? ''}' under parent '${diag.parentId}'`
+      : `Cannot route edges: missing child position '${getOrElse<string>(() => '')(fromNullable(diag.childId))}' under parent '${diag.parentId}'`
   }))
 
 const renderErrorToResolveError = (error: RenderError): ResolveError => {
@@ -378,24 +407,34 @@ const buildCompileStyleContext = (
   sourceStyleSheet: ReturnType<typeof applyDefinitionsToStyleSheet>,
   options: CompileOptions
 ): CompileStyleContext => {
-  const supplementalStyleSheet = options.styleSource === undefined
-    ? undefined
-    : parseSupplementalStyleSource(options.styleSource)
+  const styleSourceOption = fromNullable(options.styleSource)
+  if (isNone(styleSourceOption)) {
+    const variablesOption = fromNullable(options.variables)
+    const effectiveVariables = isNone(variablesOption)
+      ? sourceStyleSheet.variables
+      : mergeMaps(sourceStyleSheet.variables, variablesOption.value)
 
-  if (supplementalStyleSheet !== undefined && !supplementalStyleSheet.ok) {
+    return {
+      ok: true,
+      mergedStyleSheet: sourceStyleSheet,
+      effectiveVariables
+    }
+  }
+
+  const supplementalStyleSheet = parseSupplementalStyleSource(styleSourceOption.value)
+  if (!supplementalStyleSheet.ok) {
     return {
       ok: false,
       parseError: supplementalStyleSheet.error
     }
   }
 
-  const mergedStyleSheet = supplementalStyleSheet === undefined
-    ? sourceStyleSheet
-    : mergeStyleSheets(sourceStyleSheet, supplementalStyleSheet.styleSheet)
+  const mergedStyleSheet = mergeStyleSheets(sourceStyleSheet, supplementalStyleSheet.styleSheet)
 
-  const effectiveVariables = options.variables === undefined
+  const variablesOption = fromNullable(options.variables)
+  const effectiveVariables = isNone(variablesOption)
     ? mergedStyleSheet.variables
-    : mergeMaps(mergedStyleSheet.variables, options.variables)
+    : mergeMaps(mergedStyleSheet.variables, variablesOption.value)
 
   return {
     ok: true,
@@ -408,24 +447,37 @@ type SelectedCompileTree =
   | { readonly ok: true; readonly tree: OrgTree }
   | { readonly ok: false; readonly resolveErrors: readonly ResolveError[] }
 
+const normalizeSubtreeIds = (subtreeIds: readonly string[] | undefined): readonly string[] => {
+  const subtreeIdsOption = fromNullable(subtreeIds)
+  if (isNone(subtreeIdsOption)) {
+    return []
+  }
+
+  return subtreeIdsOption.value
+    .filter((id): id is string => typeof id === 'string')
+    .map((id) => id.trim())
+    .filter((id) => id.length > 0)
+}
+
+const unknownHandleFromOptions = (requestedSubtreeIds: readonly string[], subtreeIdOption: Option<string>): string =>
+  requestedSubtreeIds.length > 0
+    ? requestedSubtreeIds.join(', ')
+    : getOrElse<string>(() => '')(subtreeIdOption)
+
 const selectCompileTree = (
   resolvedTree: OrgTree,
   options: CompileOptions
 ): SelectedCompileTree => {
-  const requestedSubtreeIds = options.subtreeIds
-    ?.filter((id): id is string => typeof id === 'string')
-    .map((id) => id.trim())
-    .filter((id) => id.length > 0) ?? []
+  const requestedSubtreeIds = normalizeSubtreeIds(options.subtreeIds)
+  const subtreeIdOption = fromNullable(options.subtreeId)
   const treeOrNone: Option<OrgTree> = requestedSubtreeIds.length > 0
     ? isolateSubtrees(resolvedTree, requestedSubtreeIds)
-    : options.subtreeId === undefined
+    : isNone(subtreeIdOption)
       ? some(resolvedTree)
-      : isolateSubtree(resolvedTree, options.subtreeId)
+      : isolateSubtree(resolvedTree, subtreeIdOption.value)
 
   if (isNone(treeOrNone) === true) {
-    const unknownHandle = requestedSubtreeIds.length > 0
-      ? requestedSubtreeIds.join(', ')
-      : options.subtreeId ?? ''
+    const unknownHandle = unknownHandleFromOptions(requestedSubtreeIds, subtreeIdOption)
     return {
       ok: false,
       resolveErrors: [
@@ -436,7 +488,7 @@ const selectCompileTree = (
           col: 0,
           message: requestedSubtreeIds.length > 0
             ? `No subtreeIds found in tree: "${unknownHandle}"`
-            : `subtreeId not found in tree: "${options.subtreeId}"`
+            : `subtreeId not found in tree: "${getOrElse<string>(() => '')(subtreeIdOption)}"`
         }
       ]
     }
@@ -623,6 +675,30 @@ const compileTreeToSvg = (input: CompileTreeToSvgInput): CompileResult => {
       }
 }
 
+const parsedFailureToCompileErr = (
+  parsed: Extract<ReturnType<typeof parseAndResolveBtl>, { readonly ok: false }>
+): CompileErr => {
+  const parseErrorOption = fromNullable(parsed.parseError)
+  if (isSome(parseErrorOption)) {
+    return {
+      ok: false,
+      parseError: parseErrorOption.value
+    }
+  }
+
+  const resolveErrorsOption = fromNullable(parsed.resolveErrors)
+  if (isSome(resolveErrorsOption)) {
+    return {
+      ok: false,
+      resolveErrors: resolveErrorsOption.value
+    }
+  }
+
+  return {
+    ok: false
+  }
+}
+
 /**
  * Full pipeline: BTL source → RenderedSvg.
  *
@@ -662,11 +738,7 @@ export const compile = (
   })
 
   if (!parsed.ok) {
-    return {
-      ok: false,
-      ...(parsed.parseError !== undefined ? { parseError: parsed.parseError } : {}),
-      ...(parsed.resolveErrors !== undefined ? { resolveErrors: parsed.resolveErrors } : {})
-    }
+    return parsedFailureToCompileErr(parsed)
   }
 
   return compileFromParsedTree({

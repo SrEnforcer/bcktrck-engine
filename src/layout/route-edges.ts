@@ -6,6 +6,7 @@
  * Handles edge cases: same x/y coordinates, minor vertical misalignments.
  */
 
+import { fromNullable, isNone } from '@tsfpp/prelude'
 import type { EdgeRoute, EdgeRoutePoint, IndexedTree, PlacedTree, RenderConfig } from './types'
 import type { ResolvedStyleMap } from '../style/dsl'
 
@@ -208,23 +209,29 @@ export const routeEdgesWithDiagnostics = (
   type Acc = { readonly routes: readonly EdgeRoute[]; readonly diagnostics: readonly RouteEdgesDiagnostic[] }
 
   return [...input.tree.nodes.values()].reduce<Acc>((acc, parent) => {
-    const parentPos = input.placed.positions.get(parent.id)
-    if (parentPos === undefined) {
+    const parentPosOption = fromNullable(input.placed.positions.get(parent.id))
+    if (isNone(parentPosOption)) {
       return { ...acc, diagnostics: [...acc.diagnostics, { kind: 'missing_parent_position', parentId: parent.id }] }
     }
+    const parentPos = parentPosOption.value
 
     const parentPort = toPort({ x: parentPos.x, y: parentPos.y, cfg: input.cfg })
     return parent.children.reduce<Acc>((childAcc, childId) => {
-      const childPos = input.placed.positions.get(childId)
-      if (childPos === undefined) {
+      const childPosOption = fromNullable(input.placed.positions.get(childId))
+      if (isNone(childPosOption)) {
         return { ...childAcc, diagnostics: [...childAcc.diagnostics, { kind: 'missing_child_position', parentId: parent.id, childId }] }
       }
+      const childPos = childPosOption.value
 
-      const edgeStyle = input.styleMap?.get(childId)?.edgeStyle
-      const edgeWidth = input.styleMap?.get(childId)?.edgeWidth
+      const edgeStyleOption = fromNullable(input.styleMap?.get(childId)?.edgeStyle)
+      const edgeWidthOption = fromNullable(input.styleMap?.get(childId)?.edgeWidth)
       const routeKind: 'default' | 'hanging' = isHangingHint(parent.layoutHint) ? 'hanging' : 'default'
       const route = routeStrategy[routeKind]({ fromId: parent.id, toId: childId, parentPos, childPos, parentPort, cfg: input.cfg })
-      const fullRoute = { ...route, ...(edgeStyle !== undefined ? { edgeStyle } : {}), ...(edgeWidth !== undefined ? { edgeWidth } : {}) }
+      const fullRoute = {
+        ...route,
+        ...(!isNone(edgeStyleOption) ? { edgeStyle: edgeStyleOption.value } : {}),
+        ...(!isNone(edgeWidthOption) ? { edgeWidth: edgeWidthOption.value } : {})
+      }
       return { ...childAcc, routes: [...childAcc.routes, fullRoute] }
     }, acc)
   }, { routes: [], diagnostics: [] })

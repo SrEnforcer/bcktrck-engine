@@ -1,3 +1,4 @@
+import { fromNullable, getOrElse, isNone, pipe } from '@tsfpp/prelude'
 import type { IndexedTree, PlacedTree, PlacedStaff, StaffPosition } from './types'
 
 type PlaceStaffConfig = {
@@ -31,7 +32,10 @@ const toStaffPosition = (input: ToStaffPositionInput): StaffPosition => {
   const parentCenterY = input.parentY + input.config.nodeSize / 2
   return {
     id: input.staffId,
-    label: input.tree.staffLabels?.get(input.staffId) ?? input.staffId,
+    label: pipe(
+      fromNullable(input.tree.staffLabels?.get(input.staffId)),
+      getOrElse(() => input.staffId)
+    ),
     x: parentCenterX + direction * distanceFromParent - input.config.staffSize / 2,
     y: parentCenterY - input.config.staffSize / 2,
     side: input.side
@@ -39,10 +43,11 @@ const toStaffPosition = (input: ToStaffPositionInput): StaffPosition => {
 }
 
 const buildStaffForNode = (input: BuildStaffForNodeInput): readonly StaffPosition[] => {
-  const parentPos = input.placed.positions.get(input.node.id)
-  if (parentPos === undefined) {
+  const parentPosOption = fromNullable(input.placed.positions.get(input.node.id))
+  if (isNone(parentPosOption)) {
     return []
   }
+  const parentPos = parentPosOption.value
 
   const left = [...input.node.staffLeft]
     .reverse()
@@ -81,8 +86,8 @@ export const placeStaff = (
   placed: PlacedTree,
   cfg: { readonly staffSize?: number; readonly nodeSize?: number } = {}
 ): PlacedStaff => {
-  const staffSize = cfg.staffSize ?? 0.6
-  const nodeSize = cfg.nodeSize ?? 1
+  const staffSize = pipe(fromNullable(cfg.staffSize), getOrElse(() => 0.6))
+  const nodeSize = pipe(fromNullable(cfg.nodeSize), getOrElse(() => 1))
   const config: PlaceStaffConfig = {
     staffSize,
     nodeSize,

@@ -6,6 +6,7 @@
  */
 
 import type { IconNode, IconPos } from './registry'
+import { fromNullable, getOrElse, isNone } from '@tsfpp/prelude'
 import { getIcon, DEFAULT_ICON_POS, DEFAULT_ICON_SIZE } from './registry'
 
 export type { IconPos }
@@ -86,9 +87,15 @@ const iconNodesToSvg = (nodes: IconNode): string =>
   nodes
     .map(([tag, attrs]) => {
       const attrStr = Object.entries(attrs)
-        .filter(([, v]) => v !== undefined)
-        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- DEVIATION(1.6): Lucide IconNode attrs are typed as Record<string, any>; cast narrows to the only valid SVG attribute runtime primitives.
-        .map(([k, v]) => `${k}="${escapeAttr(v as string | number)}"`)
+        .flatMap(([k, v]) => {
+          const valueOption = fromNullable(v)
+          if (isNone(valueOption)) {
+            return []
+          }
+
+          // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- DEVIATION(1.6): Lucide IconNode attrs are typed as Record<string, any>; cast narrows to the only valid SVG attribute runtime primitives.
+          return [`${k}="${escapeAttr(valueOption.value as string | number)}"`]
+        })
         .join(' ')
       return `<${tag} ${attrStr}/>`
     })
@@ -108,12 +115,13 @@ const iconNodesToSvg = (nodes: IconNode): string =>
 export const renderIcon = (
   params: RenderIconParams
 ): string => {
-  const size = params.size ?? DEFAULT_ICON_SIZE
-  const color = params.color ?? 'currentColor'
-  const opacity = params.opacity ?? 0.3
+  const size = getOrElse<number>(() => DEFAULT_ICON_SIZE)(fromNullable(params.size))
+  const color = getOrElse<string>(() => 'currentColor')(fromNullable(params.color))
+  const opacity = getOrElse<number>(() => 0.3)(fromNullable(params.opacity))
   const { name, x, y } = params
   const nodes = getIcon(name)
-  if (nodes === undefined) return ''
+  const nodesOption = fromNullable(nodes)
+  if (isNone(nodesOption)) return ''
 
   const scale = size / 24
   const escapedColor = escapeAttr(color)
@@ -123,7 +131,7 @@ export const renderIcon = (
     `fill="none" stroke="${escapedColor}" stroke-width="2" ` +
     `stroke-linecap="round" stroke-linejoin="round" ` +
     `opacity="${opacity}">` +
-    iconNodesToSvg(nodes) +
+    iconNodesToSvg(nodesOption.value) +
     `</g>`
   )
 }
@@ -137,7 +145,7 @@ export const renderIconSpec = (
   const { spec, bounds, color } = params
   const size = spec.size
   const pos = spec.pos
-  const opacity = spec.opacity ?? 0.3
+  const opacity = getOrElse<number>(() => 0.3)(fromNullable(spec.opacity))
   const { x, y } = iconPosition(pos, bounds, size)
   return renderIcon({ name: spec.name, x, y, size, color, opacity })
 }

@@ -291,7 +291,7 @@ export const renderNodeIcons = (
         y,
         size,
         color,
-        opacity: spec.opacity ?? 0.3
+        opacity: spec.opacity !== undefined ? spec.opacity : 0.3
       })
     })
     .join('')
@@ -316,13 +316,12 @@ const findFirstMissingPositionNodeId = (
   placed: PlacedTree
 ): string | undefined => {
   const current = nodeIds[0]
-  if (current === undefined) {
-    return undefined
+  if (current !== undefined) {
+    return placed.positions.has(current)
+      ? findFirstMissingPositionNodeId(nodeIds.slice(1), placed)
+      : current
   }
-
-  return placed.positions.has(current)
-    ? findFirstMissingPositionNodeId(nodeIds.slice(1), placed)
-    : current
+  return undefined
 }
 
 /** Validates that each tree node has a computed layout position. */

@@ -1,4 +1,4 @@
-import { assoc, conj, entriesOfMap, intoMap, intoSet } from '@tsfpp/prelude'
+import { assoc, conj, entriesOfMap, fromNullable, getOrElse, intoMap, intoSet, isNone } from '@tsfpp/prelude'
 import type { DeptId, NodeId } from './types/branded'
 import type { DottedEdge, OrgNode, OrgTree } from './types/org-tree'
 
@@ -47,23 +47,29 @@ const buildVerticalPathFromIndex = (
   index: ReadonlyMap<string, IndexedOrgNode>,
   currentId: string
 ): VerticalPath => {
-  const current = index.get(currentId)
-  if (current === undefined) return []
+  const currentOption = fromNullable(index.get(currentId))
+  if (isNone(currentOption)) return []
+  const current = currentOption.value
 
-  return current.parentId === null
+  return isNone(fromNullable(current.parentId))
     ? [current.node.id]
-    : [current.node.id, ...buildVerticalPathFromIndex(index, current.parentId)]
+    : [current.node.id, ...buildVerticalPathFromIndex(index, getOrElse<string>(() => '')(fromNullable(current.parentId)))]
 }
 
 const findDirectManagerId = (
   index: ReadonlyMap<string, IndexedOrgNode>,
   currentId: string
 ): NodeId | undefined => {
-  const current = index.get(currentId)
-  if (current === undefined || current.parentId === null) return undefined
+  const currentOption = fromNullable(index.get(currentId))
+  if (isNone(currentOption)) return undefined
+  const current = currentOption.value
 
-  const parent = index.get(current.parentId)
-  if (parent === undefined) return undefined
+  const parentIdOption = fromNullable(current.parentId)
+  if (isNone(parentIdOption)) return undefined
+
+  const parentOption = fromNullable(index.get(parentIdOption.value))
+  if (isNone(parentOption)) return undefined
+  const parent = parentOption.value
 
   if (parent.node.kind === 'department') {
     return rawId(current.node.id) === rawId(parent.node.head)
@@ -78,22 +84,27 @@ const buildReportingChainFromIndex = (
   index: ReadonlyMap<string, IndexedOrgNode>,
   currentId: string
 ): ReportingChain => {
-  const current = index.get(currentId)
-  if (current === undefined || current.node.kind === 'department') return []
+  const currentOption = fromNullable(index.get(currentId))
+  if (isNone(currentOption)) return []
+  const current = currentOption.value
+  if (current.node.kind === 'department') return []
+  const personNodeId = current.node.id
 
   const managerId = findDirectManagerId(index, currentId)
+  const managerIdOption = fromNullable(managerId)
 
-  return managerId === undefined
-    ? [current.node.id]
-    : [current.node.id, ...buildReportingChainFromIndex(index, rawId(managerId))]
+  return isNone(managerIdOption)
+    ? [personNodeId]
+    : [personNodeId, ...buildReportingChainFromIndex(index, rawId(managerIdOption.value))]
 }
 
 const resolveReportingTargetId = (
   index: ReadonlyMap<string, IndexedOrgNode>,
   targetId: string
 ): NodeId | undefined => {
-  const current = index.get(targetId)
-  if (current === undefined) return undefined
+  const currentOption = fromNullable(index.get(targetId))
+  if (isNone(currentOption)) return undefined
+  const current = currentOption.value
 
   return current.node.kind === 'department' ? current.node.head : current.node.id
 }
@@ -129,11 +140,12 @@ export const computeReportingChain = (
 ): ReportingChain => {
   const index = buildNodeIndex(tree.root)
   const reportingTargetId = resolveReportingTargetId(index, rawId(targetId))
-  return reportingTargetId === undefined ? [] : buildReportingChainFromIndex(index, reportingTargetId)
+  const reportingTargetOption = fromNullable(reportingTargetId)
+  return isNone(reportingTargetOption) ? [] : buildReportingChainFromIndex(index, reportingTargetOption.value)
 }
 
 // ---------------------------------------------------------------------------
-// Alternative accountability chains (DT, OvJ, etc.)
+// Alternative accountability chains (DA, Mayor, etc.)
 // ---------------------------------------------------------------------------
 
 /**
@@ -166,18 +178,22 @@ type WalkAltChainInput = {
 const walkAltChain = (input: WalkAltChainInput): AltChain => {
   if (input.visited.has(input.currentId)) return []
 
-  const current = input.nodeIndex.get(rawId(input.currentId))
-  if (current === undefined || current.node.kind === 'department') return []
+  const currentOption = fromNullable(input.nodeIndex.get(rawId(input.currentId)))
+  if (isNone(currentOption)) return []
+  const current = currentOption.value
+  if (current.node.kind === 'department') return []
+  const personNodeId = current.node.id
 
   const nextRawId = input.edgeIndex.get(input.currentId)
-  if (nextRawId === undefined) {
-    return [current.node.id]
+  const nextRawOption = fromNullable(nextRawId)
+  if (isNone(nextRawOption)) {
+    return [personNodeId]
   }
 
-  const resolvedNextId = resolveReportingTargetId(input.nodeIndex, nextRawId) ?? nextRawId
+  const resolvedNextId = getOrElse<NodeId>(() => nextRawOption.value)(fromNullable(resolveReportingTargetId(input.nodeIndex, nextRawOption.value)))
 
   return [
-    current.node.id,
+    personNodeId,
     ...walkAltChain({
       edgeIndex: input.edgeIndex,
       nodeIndex: input.nodeIndex,
@@ -213,13 +229,14 @@ export const computeAltChain = (
 ): AltChain => {
   const nodeIndex = buildNodeIndex(tree.root)
   const resolvedId = resolveReportingTargetId(nodeIndex, rawId(targetId))
-  if (resolvedId === undefined) return []
+  const resolvedIdOption = fromNullable(resolvedId)
+  if (isNone(resolvedIdOption)) return []
 
   const edgeIndex = buildEdgeIndex(tree.dottedEdges, kind)
   return walkAltChain({
     edgeIndex,
     nodeIndex,
-    currentId: resolvedId,
+    currentId: resolvedIdOption.value,
     visited: intoSet<NodeId>([])
   })
 }

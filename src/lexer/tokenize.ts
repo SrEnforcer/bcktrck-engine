@@ -1,4 +1,12 @@
 /**
+ * @module lexer/tokenize
+ *
+ * Convert raw BTL source into line-aware lexical tokens for parser consumption.
+ *
+ * @packageDocumentation
+ */
+
+/**
  * Lexical analyzer: converts BTL source text into a stream of tokens.
  *
  * Recognizes keywords, identifiers, literals (dates, numbers, URLs), operators,
@@ -9,6 +17,7 @@
 // DEVIATION(2.4): Tokenization remains consolidated while parser/lexer boundary extraction is staged.
 
 import type { Token, TokenKind } from './tokens'
+import { fromNullable, getOrElse, isNone } from '@tsfpp/prelude'
 
 type IndentStyle = 'spaces' | 'tabs'
 const BASE_INDENT_LEVEL = 0
@@ -39,14 +48,14 @@ const appendToken = (
 ): readonly Token[] => [...tokens, token]
 
 const classifyWord = (word: string): TokenKind => {
-  const topLevelKeyword = topLevelKeywords[word]
-  if (topLevelKeyword !== undefined) {
-    return topLevelKeyword
+  const topLevelKeywordOption = fromNullable(topLevelKeywords[word])
+  if (!isNone(topLevelKeywordOption)) {
+    return topLevelKeywordOption.value
   }
 
-  const nodeKeyword = nodeKeywords[word]
-  if (nodeKeyword !== undefined) {
-    return nodeKeyword
+  const nodeKeywordOption = fromNullable(nodeKeywords[word])
+  if (!isNone(nodeKeywordOption)) {
+    return nodeKeywordOption.value
   }
 
   if (IDENTIFIER_PATTERN.test(word)) {
@@ -70,7 +79,7 @@ const classifyWord = (word: string): TokenKind => {
 
 const readIndent = (lineText: string): { readonly indentRaw: string; readonly content: string } => {
   const indentMatch = lineText.match(/^[ \t]*/)
-  const indentRaw = indentMatch?.[0] ?? ''
+  const indentRaw = getOrElse<string>(() => '')(fromNullable(indentMatch?.[0]))
   const content = lineText.slice(indentRaw.length)
   return { indentRaw, content }
 }
@@ -152,7 +161,7 @@ const tokenizeLine = (input: TokenizeLineInput): readonly Token[] => {
     return input.tokens
   }
 
-  const ch = input.lineText[input.index] ?? ''
+  const ch = getOrElse<string>(() => '')(fromNullable(input.lineText[input.index]))
   if (ch === ' ' || ch === '\t') {
     return tokenizeLine({ ...input, index: input.index + 1 })
   }
@@ -169,12 +178,12 @@ const tokenizeLine = (input: TokenizeLineInput): readonly Token[] => {
     })
   }
 
-  const singleCharToken = singleCharTokens[ch]
-  if (singleCharToken !== undefined) {
+  const singleCharTokenOption = fromNullable(singleCharTokens[ch])
+  if (!isNone(singleCharTokenOption)) {
     return tokenizeLine({
       ...input,
       index: input.index + 1,
-      tokens: appendToken(input.tokens, { kind: singleCharToken, value: ch, line: input.line, col: input.index + 1 })
+      tokens: appendToken(input.tokens, { kind: singleCharTokenOption.value, value: ch, line: input.line, col: input.index + 1 })
     })
   }
 
@@ -241,7 +250,8 @@ export const tokenize = (source: string): readonly Token[] => {
     }
 
     const currentStyle: IndentStyle = input.indentRaw.includes('\t') ? 'tabs' : 'spaces'
-    if (input.indentStyle !== undefined && input.indentStyle !== currentStyle) {
+    const indentStyleOption = fromNullable(input.indentStyle)
+    if (!isNone(indentStyleOption) && indentStyleOption.value !== currentStyle) {
       return {
         nextIndentStyle: input.indentStyle,
         tokens: appendToken(input.tokens, { kind: 'error', value: 'Mixed indentation: inconsistent indentation style', line: input.lineNumber, col: 1 }),
@@ -250,7 +260,7 @@ export const tokenize = (source: string): readonly Token[] => {
     }
 
     return {
-      nextIndentStyle: input.indentStyle ?? currentStyle,
+      nextIndentStyle: getOrElse<IndentStyle>(() => currentStyle)(fromNullable(input.indentStyle)),
       tokens: input.tokens,
       hasError: false
     }
@@ -264,7 +274,7 @@ export const tokenize = (source: string): readonly Token[] => {
       readonly tokens: readonly Token[]
     }
   ): { readonly stack: readonly number[]; readonly tokens: readonly Token[] } => {
-    const top = input.stack[input.stack.length - 1] ?? 0
+    const top = getOrElse<number>(() => 0)(fromNullable(input.stack[input.stack.length - 1]))
     if (top <= input.indentWidth) {
       return { stack: input.stack, tokens: input.tokens }
     }
@@ -284,7 +294,7 @@ export const tokenize = (source: string): readonly Token[] => {
       readonly tokens: readonly Token[]
     }
   ): { readonly stack: readonly number[]; readonly tokens: readonly Token[] } => {
-    const previousIndent = input.indentStack[input.indentStack.length - 1] ?? 0
+    const previousIndent = getOrElse<number>(() => 0)(fromNullable(input.indentStack[input.indentStack.length - 1]))
     if (input.indentWidth > previousIndent) {
       return {
         stack: [...input.indentStack, input.indentWidth],
@@ -299,7 +309,7 @@ export const tokenize = (source: string): readonly Token[] => {
         stack: input.indentStack,
         tokens: input.tokens
       })
-      const dedentedTop = dedented.stack[dedented.stack.length - 1] ?? 0
+      const dedentedTop = getOrElse<number>(() => 0)(fromNullable(dedented.stack[dedented.stack.length - 1]))
       return dedentedTop === input.indentWidth
         ? dedented
         : {
@@ -345,7 +355,7 @@ export const tokenize = (source: string): readonly Token[] => {
     }
 
     const lineNumber = input.idx + 1
-    const currentLine = lines[input.idx] ?? ''
+    const currentLine = getOrElse<string>(() => '')(fromNullable(lines[input.idx]))
     const { indentRaw, content } = readIndent(currentLine)
 
     // Only comment/whitespace

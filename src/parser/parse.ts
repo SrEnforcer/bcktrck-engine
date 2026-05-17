@@ -5,7 +5,7 @@
  * a well-formed AstOrg, or returns a detailed parse error on failure.
  */
 
-import { getStringField, isRecord, isSome } from '@tsfpp/prelude'
+import { getStringField, isOk, isRecord, isSome, tryCatch } from '@tsfpp/prelude'
 import { tokenize } from '../lexer/tokenize'
 import type { AstOrg } from '../types/ast'
 import type { ParseResult } from '../types/results'
@@ -28,15 +28,17 @@ const errorMessage = (error: unknown): string => {
  *          or `{ ok: false, error, line, col }` on parse failure.
  */
 export const parseBtl = (source: string): ParseResult<AstOrg> => {
-  try {
-    const tokens = tokenize(source)
-    return parse(tokens)
-  } catch (error) {
-    return {
-      ok: false,
-      error: `Parser exception: ${errorMessage(error)}`,
-      line: 1,
-      col: 1
-    }
+  const parsed = tryCatch(
+    () => parse(tokenize(source)),
+    (error) => errorMessage(error)
+  )
+  if (isOk(parsed)) {
+    return parsed.value
+  }
+  return {
+    ok: false,
+    error: `Parser exception: ${parsed.error}`,
+    line: 1,
+    col: 1
   }
 }

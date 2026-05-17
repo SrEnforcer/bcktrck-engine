@@ -14,7 +14,7 @@
  * by default, shadow placements.
  */
 
-import { absurd } from '@tsfpp/prelude'
+import { absurd, fromNullable, intoSet, isNone } from '@tsfpp/prelude'
 import type { DeptId, NodeId } from './types/branded'
 import type { OrgNode, OrgTree } from './types/org-tree'
 import { countDirectSubordinates, type SubordinateCountPolicy } from './subordinate-count-policy'
@@ -98,9 +98,7 @@ export const defaultSpanOfControlOptions: SpanOfControlOptions = {
 /** Unwraps a branded id to a plain string for map/set key comparisons. */
 const rawId = (id: NodeId | DeptId): string => id
 
-// DEVIATION(1.9): Immutable Set construction is required to return a fresh collection value.
-// eslint-disable-next-line no-restricted-syntax
-const setFromValues = <T>(values: ReadonlyArray<T>): ReadonlySet<T> => new Set(values)
+const setFromValues = <T>(values: ReadonlyArray<T>): ReadonlySet<T> => intoSet(values)
 
 /**
  * Returns the direct-report children of a node, normalised across all kinds.
@@ -201,8 +199,9 @@ export const spanOfControl = (
 
   if (options.useManualFte) {
     const fte = manualFteFrom(node)
-    if (fte !== undefined) {
-      return { nodeId, span: fte, source: 'manual' }
+    const fteOption = fromNullable(fte)
+    if (!isNone(fteOption)) {
+      return { nodeId, span: fteOption.value, source: 'manual' }
     }
   }
 

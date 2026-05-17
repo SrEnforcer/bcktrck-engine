@@ -13,12 +13,22 @@
 
 import type { AstAttr, AstAttrValue, AstConfig, AstLayoutHint, AstLayoutHintKind, AstLink, AstNode, AstNodeKind, AstOrg, AstVisualDirective } from '../types/ast'
 import type { ParseResult } from '../types/results'
+import { fromNullable, getOrElse, isNone } from '@tsfpp/prelude'
 import { token, type Parser } from './combinators'
 import type { Token } from '../lexer/tokens'
 
+const lineOr = (tokenValue: Token | undefined, fallback: number): number =>
+  getOrElse<number>(() => fallback)(fromNullable(tokenValue?.line))
+
+const colOr = (tokenValue: Token | undefined, fallback: number): number =>
+  getOrElse<number>(() => fallback)(fromNullable(tokenValue?.col))
+
+const kindOrEof = (tokenValue: Token | undefined): Token['kind'] | 'eof' =>
+  getOrElse<Token['kind'] | 'eof'>(() => 'eof')(fromNullable(tokenValue?.kind))
+
 const at = (tokenValue: Token | undefined): { readonly line: number; readonly col: number } => ({
-  line: tokenValue?.line ?? 1,
-  col: tokenValue?.col ?? 1
+  line: lineOr(tokenValue, 1),
+  col: colOr(tokenValue, 1)
 })
 
 const skipOptionalNewline = (tokens: readonly Token[]): readonly Token[] => {
@@ -76,15 +86,18 @@ const attrValueFromTokens = (valueTokens: readonly Token[]): AstAttrValue => {
   }
 
   const atHandleValue = parseAtHandleAttrValue(valueTokens)
-  if (atHandleValue !== undefined) {
-    return atHandleValue
+  const atHandleValueOption = fromNullable(atHandleValue)
+  if (!isNone(atHandleValueOption)) {
+    return atHandleValueOption.value
   }
 
   const [first] = valueTokens
-  if (valueTokens.length === 1 && first !== undefined) {
-    const singleTokenValue = parseSingleTokenAttrValue(first)
-    if (singleTokenValue !== undefined) {
-      return singleTokenValue
+  const firstOption = fromNullable(first)
+  if (valueTokens.length === 1 && !isNone(firstOption)) {
+    const singleTokenValue = parseSingleTokenAttrValue(firstOption.value)
+    const singleTokenValueOption = fromNullable(singleTokenValue)
+    if (!isNone(singleTokenValueOption)) {
+      return singleTokenValueOption.value
     }
   }
 
@@ -114,16 +127,17 @@ const parseRoleTokens = (
   tags: readonly string[] = []
 ): { readonly tags: readonly string[]; readonly rest: readonly Token[] } => {
   const current = rest[0]
-  if (current === undefined || current.kind === 'rbracket') {
+  const currentOption = fromNullable(current)
+  if (isNone(currentOption) || currentOption.value.kind === 'rbracket') {
     return { tags: flushRoleTag(currentTagTokens, tags), rest }
   }
 
-  if (current.kind === 'comma') {
+  if (currentOption.value.kind === 'comma') {
     const nextTags = flushRoleTag(currentTagTokens, tags)
     return parseRoleComma(rest, nextTags)
   }
 
-  return parseRoleTokens(rest.slice(1), [...currentTagTokens, current], tags)
+  return parseRoleTokens(rest.slice(1), [...currentTagTokens, currentOption.value], tags)
 }
 
 const parseRoleComma = (
@@ -146,11 +160,12 @@ const consumeUntilAttrDelimiter = (
   valueTokens: readonly Token[] = []
 ): { readonly valueTokens: readonly Token[]; readonly rest: readonly Token[] } => {
   const current = rest[0]
-  if (current === undefined || current.kind === 'comma' || current.kind === 'rbracket') {
+  const currentOption = fromNullable(current)
+  if (isNone(currentOption) || currentOption.value.kind === 'comma' || currentOption.value.kind === 'rbracket') {
     return { valueTokens, rest }
   }
 
-  return consumeUntilAttrDelimiter(rest.slice(1), [...valueTokens, current])
+  return consumeUntilAttrDelimiter(rest.slice(1), [...valueTokens, currentOption.value])
 }
 
 const parseRoleAttrValue = (tokens: readonly Token[]): { readonly value: AstAttrValue; readonly rest: readonly Token[] } => {
@@ -197,11 +212,12 @@ const collectNodeNameTokens = (
   const stops: readonly Token['kind'][] = ['at', 'lbracket', 'percent', 'bang', 'newline', 'indent', 'dedent', 'eof']
   const isNameToken = current?.kind === 'identifier' || current?.kind === 'display_text' || current?.kind === 'string_lit'
 
-  if (current === undefined || stops.includes(current.kind) || !isNameToken) {
+  const currentOption = fromNullable(current)
+  if (isNone(currentOption) || stops.includes(currentOption.value.kind) || !isNameToken) {
     return { nameTokens: acc, rest: tokens }
   }
 
-  return collectNodeNameTokens(tokens.slice(1), [...acc, current])
+  return collectNodeNameTokens(tokens.slice(1), [...acc, currentOption.value])
 }
 
 const parseOptionalHandle = (tokens: readonly Token[]): ParseResult<{ readonly handle: string | undefined; readonly rest: readonly Token[] }> => {
@@ -218,7 +234,7 @@ const parseOptionalHandle = (tokens: readonly Token[]): ParseResult<{ readonly h
     const pos = at(handleToken)
     return {
       ok: false,
-      error: `Expected handle identifier, got ${handleToken?.kind ?? 'eof'}`,
+      error: `Expected handle identifier, got ${kindOrEof(handleToken)}`,
       line: pos.line,
       col: pos.col
     }
@@ -264,12 +280,13 @@ const parseDirectiveParams = (
   }
 
   const param = tokens[1]
+  const paramOption = fromNullable(param)
   if (
-    param === undefined ||
-    param.kind === 'newline' ||
-    param.kind === 'dedent' ||
-    param.kind === 'indent' ||
-    param.kind === 'eof'
+    isNone(paramOption) ||
+    paramOption.value.kind === 'newline' ||
+    paramOption.value.kind === 'dedent' ||
+    paramOption.value.kind === 'indent' ||
+    paramOption.value.kind === 'eof'
   ) {
     const pos = at(tokens[0])
     return {
@@ -280,7 +297,7 @@ const parseDirectiveParams = (
     }
   }
 
-  return parseDirectiveParams(tokens.slice(2), [...params, param.value])
+  return parseDirectiveParams(tokens.slice(2), [...params, paramOption.value.value])
 }
 
 const parseVisualDirectives = (
@@ -304,7 +321,8 @@ const parseVisualDirectives = (
 }
 
 const parseAttrKeyToken = (tokenValue: Token | undefined): ParseResult<Token> => {
-  if (tokenValue === undefined) {
+  const tokenOption = fromNullable(tokenValue)
+  if (isNone(tokenOption)) {
     const pos = at(tokenValue)
     return {
       ok: false,
@@ -313,14 +331,15 @@ const parseAttrKeyToken = (tokenValue: Token | undefined): ParseResult<Token> =>
       col: pos.col
     }
   }
+  const safeToken = tokenOption.value
 
-  const isBooleanKeyword = tokenValue.kind === 'keyword_vacant' || tokenValue.kind === 'keyword_shared'
-  const isKnownKey = tokenValue.kind === 'identifier' || tokenValue.kind === 'display_text' || isBooleanKeyword
+  const isBooleanKeyword = safeToken.kind === 'keyword_vacant' || safeToken.kind === 'keyword_shared'
+  const isKnownKey = safeToken.kind === 'identifier' || safeToken.kind === 'display_text' || isBooleanKeyword
   if (!isKnownKey) {
-    const pos = at(tokenValue)
+    const pos = at(safeToken)
     return {
       ok: false,
-      error: `Expected attribute key, got ${tokenValue.kind}`,
+      error: `Expected attribute key, got ${safeToken.kind}`,
       line: pos.line,
       col: pos.col
     }
@@ -328,7 +347,7 @@ const parseAttrKeyToken = (tokenValue: Token | undefined): ParseResult<Token> =>
 
   return {
     ok: true,
-    value: tokenValue,
+    value: safeToken,
     rest: []
   }
 }
@@ -373,8 +392,10 @@ const parseAttrValueByKey = (
 const parseSingleAttrEntry = (
   rest: readonly Token[]
 ): ParseResult<{ readonly attr: AstAttr; readonly rest: readonly Token[] }> => {
-  if (rest[0] === undefined || rest[0].kind === 'newline' || rest[0].kind === 'dedent' || rest[0].kind === 'eof') {
-    const pos = at(rest[0])
+  const current = rest[0]
+  const currentOption = fromNullable(current)
+  if (isNone(currentOption) || currentOption.value.kind === 'newline' || currentOption.value.kind === 'dedent' || currentOption.value.kind === 'eof') {
+    const pos = at(current)
     return {
       ok: false,
       error: 'Expected rbracket, got eof',
@@ -418,12 +439,13 @@ const parseNodeKindPrefix = (
   }
 
   const keyword = tokens[1]
-  const mapped = nodeKindFromKeyword(keyword?.kind ?? 'eof')
-  if (mapped === undefined) {
+  const mapped = nodeKindFromKeyword(kindOrEof(keyword))
+  const mappedOption = fromNullable(mapped)
+  if (isNone(mappedOption)) {
     const pos = at(keyword)
     return {
       ok: false,
-      error: `Expected node type keyword after ~, got ${keyword?.kind ?? 'eof'}`,
+      error: `Expected node type keyword after ~, got ${kindOrEof(keyword)}`,
       line: pos.line,
       col: pos.col
     }
@@ -432,7 +454,7 @@ const parseNodeKindPrefix = (
   return {
     ok: true,
     value: {
-      kind: mapped,
+      kind: mappedOption.value,
       rest: tokens.slice(2)
     },
     rest: tokens.slice(2)
@@ -458,16 +480,17 @@ const parseNodePrefix = (tokens: readonly Token[]): ParseResult<ParsedNodePrefix
     return attrsResult
   }
 
-  const secondHandleResult = firstHandleResult.value.handle === undefined
+  const firstHandleOption = fromNullable(firstHandleResult.value.handle)
+  const secondHandleResult = isNone(firstHandleOption)
     ? parseOptionalHandle(attrsResult.value.rest)
     : {
-        ok: true as const,
-        value: {
-          handle: firstHandleResult.value.handle,
-          rest: attrsResult.value.rest
-        },
+      ok: true as const,
+      value: {
+        handle: firstHandleOption.value,
         rest: attrsResult.value.rest
-      }
+      },
+      rest: attrsResult.value.rest
+    }
 
   if (!secondHandleResult.ok) {
     return secondHandleResult
@@ -557,7 +580,8 @@ const parseLayoutHint = (tokens: readonly Token[]): ParseResult<AstLayoutHint> =
   }
 
   const layoutHintKind = parseLayoutHintKind(hintNameResult.value.value)
-  if (layoutHintKind === undefined) {
+  const layoutHintKindOption = fromNullable(layoutHintKind)
+  if (isNone(layoutHintKindOption)) {
     const pos = at(hintNameResult.value)
     return {
       ok: false,
@@ -574,7 +598,7 @@ const parseLayoutHint = (tokens: readonly Token[]): ParseResult<AstLayoutHint> =
 
   return {
     ok: true,
-    value: { kind: layoutHintKind, param: paramResult.value.param },
+    value: { kind: layoutHintKindOption.value, param: paramResult.value.param },
     rest: paramResult.value.rest
   }
 }
@@ -584,7 +608,7 @@ const parseLayoutHintName = (hintToken: Token | undefined): ParseResult<Token> =
     const pos = at(hintToken)
     return {
       ok: false,
-      error: `Expected layout hint name, got ${hintToken?.kind ?? 'eof'}`,
+      error: `Expected layout hint name, got ${kindOrEof(hintToken)}`,
       line: pos.line,
       col: pos.col
     }
@@ -612,13 +636,15 @@ const parseLayoutHintParam = (
     }
   }
 
-  if (valueToken === undefined) {
+  const valueTokenOption = fromNullable(valueToken)
+  if (isNone(valueTokenOption)) {
     return parseLayoutHintMissingParam(colon)
   }
+  const safeValueToken = valueTokenOption.value
 
-  const parsedParam = valueToken?.kind === 'number_lit'
-    ? Number(valueToken.value)
-    : valueToken?.value
+  const parsedParam = safeValueToken.kind === 'number_lit'
+    ? Number(safeValueToken.value)
+    : safeValueToken.value
 
   return {
     ok: true,
@@ -665,7 +691,7 @@ const parseVisualDirective = (tokens: readonly Token[]): ParseResult<AstVisualDi
     const pos = at(nameToken)
     return {
       ok: false,
-      error: `Expected directive name, got ${nameToken?.kind ?? 'eof'}`,
+      error: `Expected directive name, got ${kindOrEof(nameToken)}`,
       line: pos.line,
       col: pos.col
     }
@@ -710,7 +736,7 @@ const parseNodeLine: Parser<AstNode> = (tokens) => {
 
   const finalHandle = prefix.value.handle
 
-  if (prefix.value.named.nameTokens.length === 0 && finalHandle === undefined) {
+  if (prefix.value.named.nameTokens.length === 0 && isNone(fromNullable(finalHandle))) {
     const pos = at(decorations.value.rest[0])
     return {
       ok: false,
@@ -787,18 +813,19 @@ const collectConfigValueTokens = (
   acc: readonly Token[] = []
 ): { readonly valueTokens: readonly Token[]; readonly rest: readonly Token[] } => {
   const current = rest[0]
-  if (current === undefined || current.kind === 'newline' || current.kind === 'dedent' || current.kind === 'eof') {
+  const currentOption = fromNullable(current)
+  if (isNone(currentOption) || currentOption.value.kind === 'newline' || currentOption.value.kind === 'dedent' || currentOption.value.kind === 'eof') {
     return { valueTokens: acc, rest }
   }
 
-  return collectConfigValueTokens(rest.slice(1), [...acc, current])
+  return collectConfigValueTokens(rest.slice(1), [...acc, currentOption.value])
 }
 
 const parseConfigKeyAndColon = (
   tokens: readonly Token[]
 ): ParseResult<{ readonly keyToken: Token; readonly valueTokensStart: readonly Token[] }> => {
   const keyToken = tokens[0]
-  const keyKind = keyToken?.kind ?? 'eof'
+  const keyKind = kindOrEof(keyToken)
   if (!isConfigKeyToken(keyToken)) {
     const pos = at(keyToken)
     return {
@@ -810,7 +837,7 @@ const parseConfigKeyAndColon = (
   }
 
   const colonToken = tokens[1]
-  const colonKind = colonToken?.kind ?? 'eof'
+  const colonKind = kindOrEof(colonToken)
   if (!isColonToken(colonToken)) {
     const pos = at(colonToken)
     return {
@@ -859,7 +886,9 @@ const parseConfigPairs = (
   rest: readonly Token[],
   pairs: readonly AstAttr[] = []
 ): ParseResult<{ readonly pairs: readonly AstAttr[]; readonly rest: readonly Token[] }> => {
-  if (rest[0] === undefined || rest[0].kind === 'dedent' || rest[0].kind === 'eof') {
+  const current = rest[0]
+  const currentOption = fromNullable(current)
+  if (isNone(currentOption) || currentOption.value.kind === 'dedent' || currentOption.value.kind === 'eof') {
     return {
       ok: true,
       value: { pairs, rest },
@@ -867,7 +896,7 @@ const parseConfigPairs = (
     }
   }
 
-  if (rest[0].kind === 'newline') {
+  if (currentOption.value.kind === 'newline') {
     return parseConfigPairs(rest.slice(1), pairs)
   }
 
@@ -993,7 +1022,9 @@ const parseLinksInBlock = (
   rest: readonly Token[],
   links: readonly AstLink[] = []
 ): ParseResult<{ readonly links: readonly AstLink[]; readonly rest: readonly Token[] }> => {
-  if (rest[0] === undefined || rest[0].kind === 'dedent' || rest[0].kind === 'eof') {
+  const current = rest[0]
+  const currentOption = fromNullable(current)
+  if (isNone(currentOption) || currentOption.value.kind === 'dedent' || currentOption.value.kind === 'eof') {
     return {
       ok: true,
       value: { links, rest },
@@ -1001,7 +1032,7 @@ const parseLinksInBlock = (
     }
   }
 
-  if (rest[0].kind === 'newline') {
+  if (currentOption.value.kind === 'newline') {
     return parseLinksInBlock(rest.slice(1), links)
   }
 
@@ -1056,7 +1087,9 @@ const parseNodesInBlock = (
   rest: readonly Token[],
   nodes: readonly AstNode[] = []
 ): ParseResult<readonly AstNode[]> => {
-  if (rest[0] === undefined || rest[0].kind === 'dedent' || rest[0].kind === 'eof') {
+  const current = rest[0]
+  const currentOption = fromNullable(current)
+  if (isNone(currentOption) || currentOption.value.kind === 'dedent' || currentOption.value.kind === 'eof') {
     return {
       ok: true,
       value: nodes,
@@ -1064,7 +1097,7 @@ const parseNodesInBlock = (
     }
   }
 
-  if (rest[0].kind === 'newline') {
+  if (currentOption.value.kind === 'newline') {
     return parseNodesInBlock(rest.slice(1), nodes)
   }
 

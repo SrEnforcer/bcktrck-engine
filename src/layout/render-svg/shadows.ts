@@ -6,6 +6,7 @@
 
 // DEVIATION(2.4): Shadow rendering remains co-located to preserve connector and label alignment behavior.
 
+import { fromNullable, getOrElse, intoMap, isNone, pipe } from '@tsfpp/prelude'
 import type { ShadowNode } from '../../types/org-tree'
 import type { ResolvedNodeStyle, ResolvedStyleMap, ResolvedTextStyles } from '../../style/dsl'
 import type { IndexedTree, PlacedTree, PlacedStaff, RenderConfig } from '../types'
@@ -136,20 +137,23 @@ const resolveStaffShadowPlacement = (
     return undefined
   }
 
-  const anchorBounds = input.shadow.host !== undefined
-    ? getNodeBounds({
-      id: input.shadow.host,
+  const hostOption = fromNullable(input.shadow.host)
+  const hostAnchor = isNone(hostOption)
+    ? input.primaryPos
+    : getNodeBounds({
+      id: hostOption.value,
       placed: input.placed,
       staff: input.staff,
       cfg: input.cfg,
       shadowBoundsMap: undefined
-    }) ?? input.primaryPos
-    : input.primaryPos
-  if (anchorBounds === undefined) {
+    })
+  const anchorBoundsOption = fromNullable(pipe(fromNullable(hostAnchor), getOrElse(() => input.primaryPos)))
+  if (isNone(anchorBoundsOption)) {
     return undefined
   }
+  const anchorBounds = anchorBoundsOption.value
 
-  const side = input.shadow.side ?? 'right'
+  const side = pipe(fromNullable(input.shadow.side), getOrElse(() => 'right'))
   const gap = input.cfg.colWidth * STAFF_SHADOW_EDGE_GAP_RATIO
   const x = side === 'left'
     ? anchorBounds.cx - anchorBounds.w / 2 - gap - input.dimensions.w
@@ -171,20 +175,28 @@ const resolveGenericShadowPlacement = (
   input: ResolveGenericShadowPlacementInput
 ): ShadowPlacement | undefined => {
   const explicitPos = input.placed.positions.get(String(input.shadow.id))
-  const explicitPixels = explicitPos !== undefined ? gridToPixels(explicitPos.x, explicitPos.y, input.cfg) : undefined
+  const explicitPosOption = fromNullable(explicitPos)
+  const explicitPixels = isNone(explicitPosOption)
+    ? undefined
+    : gridToPixels(explicitPosOption.value.x, explicitPosOption.value.y, input.cfg)
+  const explicitPixelsOption = fromNullable(explicitPixels)
 
-  const anchor = explicitPixels !== undefined
-    ? { cx: explicitPixels.x + (input.cfg.nodeSize * input.cfg.colWidth) / 2, cy: explicitPixels.y + (input.cfg.nodeSize * input.cfg.rowHeight) / 2 }
-    : input.primaryPos
-  if (anchor === undefined) {
+  const anchorOption = fromNullable(!isNone(explicitPixelsOption)
+    ? {
+      cx: explicitPixelsOption.value.x + (input.cfg.nodeSize * input.cfg.colWidth) / 2,
+      cy: explicitPixelsOption.value.y + (input.cfg.nodeSize * input.cfg.rowHeight) / 2
+    }
+    : input.primaryPos)
+  if (isNone(anchorOption)) {
     return undefined
   }
+  const anchor = anchorOption.value
 
-  const x = explicitPixels !== undefined
-    ? explicitPixels.x + (input.cfg.nodeSize * input.cfg.colWidth - input.dimensions.w) / 2
+  const x = !isNone(explicitPixelsOption)
+    ? explicitPixelsOption.value.x + (input.cfg.nodeSize * input.cfg.colWidth - input.dimensions.w) / 2
     : (anchor.cx + input.cfg.colWidth * input.cfg.shadowOffsetX - input.dimensions.w / 2)
-  const y = explicitPixels !== undefined
-    ? explicitPixels.y + (input.cfg.nodeSize * input.cfg.rowHeight - input.dimensions.h) / 2
+  const y = !isNone(explicitPixelsOption)
+    ? explicitPixelsOption.value.y + (input.cfg.nodeSize * input.cfg.rowHeight - input.dimensions.h) / 2
     : (anchor.cy + input.cfg.rowHeight * input.cfg.shadowOffsetY - input.dimensions.h / 2)
 
   return {
@@ -211,7 +223,7 @@ const resolveShadowPlacement = (
     shadowBoundsMap: undefined
   })
   const explicitPos = input.placed.positions.get(String(input.shadow.id))
-  if (explicitPos === undefined && primaryPos === undefined) {
+  if (isNone(fromNullable(explicitPos)) && isNone(fromNullable(primaryPos))) {
     return undefined
   }
 
@@ -225,14 +237,17 @@ const resolveShadowPlacement = (
     primaryPos,
     shadowStyle
   })
-  return staffPlacement ?? resolveGenericShadowPlacement({
-    shadow: input.shadow,
-    placed: input.placed,
-    cfg: input.cfg,
-    dimensions,
-    primaryPos,
-    shadowStyle
-  })
+  return pipe(
+    fromNullable(staffPlacement),
+    getOrElse(() => resolveGenericShadowPlacement({
+      shadow: input.shadow,
+      placed: input.placed,
+      cfg: input.cfg,
+      dimensions,
+      primaryPos,
+      shadowStyle
+    }))
+  )
 }
 
 const renderShadowLabelElement = (
@@ -241,10 +256,17 @@ const renderShadowLabelElement = (
   const primaryId = String(input.shadow.primary)
   const primaryNode = input.tree.nodes.get(primaryId)
   const primaryStaff = input.staff.staff.find((entry) => entry.id === primaryId)
-  const primaryLabel = primaryNode?.label ?? primaryStaff?.label ?? input.tree.staffLabels?.get(primaryId)
-  const shadowLabelText = primaryLabel !== undefined
-    ? composeShadowLabel(primaryLabel, input.shadow.label)
-    : (input.shadow.label ?? input.shadow.id)
+  const primaryLabel = pipe(
+    fromNullable(primaryNode?.label),
+    getOrElse(() => pipe(
+      fromNullable(primaryStaff?.label),
+      getOrElse(() => input.tree.staffLabels?.get(primaryId))
+    ))
+  )
+  const primaryLabelOption = fromNullable(primaryLabel)
+  const shadowLabelText = isNone(primaryLabelOption)
+    ? pipe(fromNullable(input.shadow.label), getOrElse(() => String(input.shadow.id)))
+    : composeShadowLabel(primaryLabelOption.value, input.shadow.label)
   const shadowBaseFont = Math.max(1, input.cfg.fontSize * input.cfg.shadowFontScale)
   const maxCharsPerLine = Math.max(8, Math.floor((input.placement.w - 10) / (shadowBaseFont * 0.52)))
   const styledLines = buildStyledLabelLines(shadowLabelText, maxCharsPerLine, 3)
@@ -269,8 +291,21 @@ const renderShadowLabelElement = (
 
 const renderShadowRectElement = (
   input: RenderShadowRectElementInput
-): string =>
-  `<rect id="${escapeXml(input.shadow.id)}" class="shadow" x="${input.placement.x}" y="${input.placement.y}" width="${input.placement.w}" height="${input.placement.h}" fill="${input.placement.shadowStyle?.backgroundColor !== undefined ? escapeXml(input.placement.shadowStyle.backgroundColor) : input.safeCfg.employeeFill}"${input.placement.shadowStyle?.borderStyle === 'none' ? '' : ` stroke="${input.placement.shadowStyle?.borderColor !== undefined ? escapeXml(input.placement.shadowStyle.borderColor) : input.safeCfg.nodeBorder}"`}${strokeWidthAttr(input.placement.shadowStyle?.borderWidth ?? 1)} opacity="${input.cfg.shadowOpacity}"${rectStrokeStyleAttrs(input.placement.shadowStyle)} />`
+): string => {
+  const backgroundColor = pipe(
+    fromNullable(input.placement.shadowStyle?.backgroundColor),
+    getOrElse(() => input.safeCfg.employeeFill)
+  )
+  const borderColor = pipe(
+    fromNullable(input.placement.shadowStyle?.borderColor),
+    getOrElse(() => input.safeCfg.nodeBorder)
+  )
+  const strokeAttr = input.placement.shadowStyle?.borderStyle === 'none'
+    ? ''
+    : ` stroke="${escapeXml(borderColor)}"`
+
+  return `<rect id="${escapeXml(input.shadow.id)}" class="shadow" x="${input.placement.x}" y="${input.placement.y}" width="${input.placement.w}" height="${input.placement.h}" fill="${escapeXml(backgroundColor)}"${strokeAttr}${strokeWidthAttr(pipe(fromNullable(input.placement.shadowStyle?.borderWidth), getOrElse(() => 1)))} opacity="${input.cfg.shadowOpacity}"${rectStrokeStyleAttrs(input.placement.shadowStyle)} />`
+}
 
 const shadowEdgeAttachPoint = (
   input: ShadowEdgeAttachPointInput
@@ -288,10 +323,11 @@ const renderShadowConnectorElements = (
   placement: ShadowPlacement,
   safeCfg: RenderConfig
 ): readonly string[] => {
-  if (shadow.hideConnector === true || placement.primaryPos === undefined) {
+  const primaryPosOption = fromNullable(placement.primaryPos)
+  if (shadow.hideConnector === true || isNone(primaryPosOption)) {
     return []
   }
-  const { cx: pcx, cy: pcy, w: pw, h: ph } = placement.primaryPos
+  const { cx: pcx, cy: pcy, w: pw, h: ph } = primaryPosOption.value
   const dx = placement.sx - pcx
   const dy = placement.sy - pcy
   const start = shadowEdgeAttachPoint({ cx: pcx, cy: pcy, w: pw, h: ph, dx, dy, outward: true })
@@ -309,25 +345,31 @@ const renderSingleShadowBody = (
     cfg: input.cfg,
     styleMap: input.styleMap
   })
-  if (placement === undefined) {
+  const placementOption = fromNullable(placement)
+  if (isNone(placementOption)) {
     return { bodyElements: [], edgeElements: [], bounds: emptyRenderBounds() }
   }
+  const safePlacement = placementOption.value
 
   const labelElement = renderShadowLabelElement({
     shadow: input.shadow,
     tree: input.tree,
     staff: input.staff,
-    placement,
+    placement: safePlacement,
     cfg: input.cfg,
     safeCfg: input.safeCfg,
     textStyles: input.textStyles
   })
-  const rectElement = renderShadowRectElement({ shadow: input.shadow, placement, cfg: input.cfg, safeCfg: input.safeCfg })
-  const connectorElements = renderShadowConnectorElements(input.shadow, placement, input.safeCfg)
-  const nodeBounds = boundsFromRect({ x: placement.x, y: placement.y, w: placement.w, h: placement.h })
-  const connectorBounds = placement.primaryPos !== undefined
-    ? expandBoundsWithPoints(nodeBounds, [{ x: placement.sx, y: placement.sy }, { x: placement.primaryPos.cx, y: placement.primaryPos.cy }])
-    : nodeBounds
+  const rectElement = renderShadowRectElement({ shadow: input.shadow, placement: safePlacement, cfg: input.cfg, safeCfg: input.safeCfg })
+  const connectorElements = renderShadowConnectorElements(input.shadow, safePlacement, input.safeCfg)
+  const nodeBounds = boundsFromRect({ x: safePlacement.x, y: safePlacement.y, w: safePlacement.w, h: safePlacement.h })
+  const primaryPosOption = fromNullable(safePlacement.primaryPos)
+  const connectorBounds = isNone(primaryPosOption)
+    ? nodeBounds
+    : expandBoundsWithPoints(
+      nodeBounds,
+      [{ x: safePlacement.sx, y: safePlacement.sy }, { x: primaryPosOption.value.cx, y: primaryPosOption.value.cy }]
+    )
 
   return {
     bodyElements: [rectElement, labelElement],
@@ -341,23 +383,23 @@ export const buildShadowBoundsMap = (
   input: BuildShadowBoundsMapInput
 ): ReadonlyMap<string, NodeBounds> => {
   const entries = input.shadowNodes.flatMap((shadow) => {
-    const placement = resolveShadowPlacement({
+    const placementOption = fromNullable(resolveShadowPlacement({
       shadow,
       placed: input.placed,
       staff: input.staff,
       cfg: input.cfg,
       styleMap: input.styleMap
-    })
-    if (placement === undefined) {
+    }))
+    if (isNone(placementOption)) {
       return []
     }
+    const placement = placementOption.value
     const bounds: NodeBounds = { cx: placement.sx, cy: placement.sy, w: placement.w, h: placement.h }
     return [[String(shadow.id), bounds] as const]
   })
 
   // DEVIATION(1.9): The boundary contract requires a ReadonlyMap for fast lookup by shadow id.
-  // eslint-disable-next-line no-restricted-syntax -- DEVIATION(1.9): required map construction at rendering boundary.
-  return new Map(entries)
+  return intoMap(entries)
 }
 
 /** Builds SVG elements for all shadow node bodies and their connectors. */

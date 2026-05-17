@@ -10,6 +10,8 @@
 
 // DEVIATION(2.4): Pack registry remains in one file while themed pack extraction is staged.
 
+import { fromNullable, getOrElse } from '@tsfpp/prelude'
+
 /**
  * Named style packs. Each pack is a complete BTL `defs` and/or `style` block
  * that can be composed with org sources.
@@ -468,5 +470,5 @@ export const createStylePackLoader = (
 ): ((packName: string) => string | undefined) =>
   (packName: string): string | undefined => {
     const name = packName.toLowerCase()
-    return customPacks[name] ?? stylePacks[name]
+    return getOrElse<string | undefined>(() => stylePacks[name])(fromNullable(customPacks[name]))
   }

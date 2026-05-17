@@ -1,4 +1,13 @@
 /**
+ * @module layout/buchheim
+ *
+ * Implements Buchheim's linear-time tidy-tree layout over indexed nodes using
+ * internal mutable scratch state while exposing immutable placement results.
+ *
+ * @packageDocumentation
+ */
+
+/**
  * PURE CORE — no side-effects; all I/O enters via parameters.
  *
  * Buchheim tree layout algorithm.
@@ -12,19 +21,29 @@
  */
 
 // DEVIATION(2.4): Buchheim implementation remains consolidated for algorithmic parity; helper extraction is staged.
+// NOTE(unknown, 2026-05-18): Core traversal keeps imperative structure to preserve algorithmic guarantees and contour invariants.
 
+// DEVIATION(1.6): Internal traversal invariants guarantee map lookups for visited ids.
 /* eslint-disable @typescript-eslint/no-non-null-assertion */
- 
+// DEVIATION(1.6): Internal mutable scratch adapters require boundary assertions at the map-cast seam.
 /* eslint-disable @typescript-eslint/consistent-type-assertions */
+// DEVIATION(4.4): Buchheim contour merge is intentionally branch-heavy to mirror the reference algorithm.
 /* eslint-disable complexity */
+// DEVIATION(4.4): Single-file algorithm module remains co-located for traceability against the paper.
+/* eslint-disable max-lines */
+// DEVIATION(4.4): Core walk functions exceed size limits to preserve algorithmic parity during staged extraction.
 /* eslint-disable max-lines-per-function */
+// DEVIATION(6.2): Scratch structures are mutated in-place to maintain linear-time behavior.
 /* eslint-disable functional/immutable-data */
+// DEVIATION(6.2): Loop-based contour traversal is required for the reference implementation.
 /* eslint-disable functional/no-let */
+// DEVIATION(6.2): While-loops are required to advance contour pointers efficiently.
 /* eslint-disable functional/no-loop-statements */
+// DEVIATION(6.2): Internal mutation-oriented types intentionally use mutable fields in scratch state.
 /* eslint-disable functional/prefer-readonly-type */
 
-
 import type { IndexedTree, LayoutPoint, PlacedTree } from './types'
+import { fromNullable, getOrElse, intoMap, isNone } from '@tsfpp/prelude'
 
 // ---------------------------------------------------------------------------
 // Mutable per-node scratch state (never escapes the module)
@@ -144,9 +163,8 @@ const mutableScratchOf = (
 
 const mutableMapOf = <K, V>(map: ReadonlyMap<K, V>): Map<K, V> => map as Map<K, V>
 
-// DEVIATION(1.9): Immutable-style map construction is required in this algorithm module to avoid mutating input maps.
-// eslint-disable-next-line no-restricted-syntax
-const mutableMapFromEntries = <K, V>(entries: ReadonlyArray<readonly [K, V]>): Map<K, V> => new Map(entries)
+const mutableMapFromEntries = <K, V>(entries: ReadonlyArray<readonly [K, V]>): Map<K, V> =>
+  intoMap(entries) as unknown as Map<K, V>
 
 const makeScratch = (id: string, childCount: number): Scratch => ({
   prelim: 0,
@@ -169,35 +187,47 @@ const executeShifts = (
     .reduce<ShiftPlanState>(
       (acc, childId) => {
         const ws = scratch.get(childId)
-        if (ws === undefined) {
-          return acc
+        const wsOption = fromNullable(ws)
+        if (!isNone(wsOption)) {
+          const nextChange = acc.change + wsOption.value.change
+          const nextShift = acc.shift + wsOption.value.shift + nextChange
+          return {
+            shift: nextShift,
+            change: nextChange,
+            updates: [...acc.updates, { id: childId, delta: acc.shift }]
+          }
         }
-        const nextChange = acc.change + ws.change
-        const nextShift = acc.shift + ws.shift + nextChange
-        return {
-          shift: nextShift,
-          change: nextChange,
-          updates: [...acc.updates, { id: childId, delta: acc.shift }]
-        }
+        return acc
       },
       { shift: 0, change: 0, updates: [] }
     )
 
   shiftPlan.updates.forEach(({ id, delta }) => {
     const ws = mutableScratchOf(scratch, id)
-    if (ws === undefined) {
-      return
+    const wsOption = fromNullable(ws)
+    if (!isNone(wsOption)) {
+      wsOption.value.prelim += delta
+      wsOption.value.mod += delta
     }
-    ws.prelim += delta
-    ws.mod += delta
   })
+}
+
+const scratchPrelimOrZero = (
+  id: string | undefined,
+  scratch: ReadonlyMap<string, Scratch>
+): number => {
+  const idOption = fromNullable(id)
+  if (isNone(idOption)) return 0
+
+  const nodeScratchOption = fromNullable(scratch.get(idOption.value))
+  return isNone(nodeScratchOption) ? 0 : nodeScratchOption.value.prelim
 }
 
 const childMidpoint = (children: readonly string[], scratch: ReadonlyMap<string, Scratch>): number => {
   const leftId = children[0]
   const rightId = children.length > 0 ? children[children.length - 1] : undefined
-  const leftPrelim = leftId !== undefined ? (scratch.get(leftId)?.prelim ?? 0) : 0
-  const rightPrelim = rightId !== undefined ? (scratch.get(rightId)?.prelim ?? 0) : 0
+  const leftPrelim = scratchPrelimOrZero(leftId, scratch)
+  const rightPrelim = scratchPrelimOrZero(rightId, scratch)
   return (leftPrelim + rightPrelim) / 2
 }
 
@@ -206,16 +236,29 @@ const childMidpoint = (children: readonly string[], scratch: ReadonlyMap<string,
 // ---------------------------------------------------------------------------
 
 const childIds = (id: string, nodes: ReadonlyMap<string, NodeMeta>): readonly string[] =>
-  nodes.get(id)?.children ?? []
+  getOrElse<readonly string[]>(() => [])(fromNullable(nodes.get(id)?.children))
+
+const nextContourOrSelf = (
+  candidate: string | null,
+  fallback: string
+): string => getOrElse<string>(() => fallback)(fromNullable(candidate))
 
 const firstChildId = (id: string, nodes: ReadonlyMap<string, NodeMeta>): string | null => {
   const children = childIds(id, nodes)
-  return children.length > 0 ? (children[0] ?? null) : null
+  if (children.length === 0) {
+    return null
+  }
+  const first = children[0]
+  return getOrElse<string | null>(() => null)(fromNullable(first))
 }
 
 const lastChildId = (id: string, nodes: ReadonlyMap<string, NodeMeta>): string | null => {
   const children = childIds(id, nodes)
-  return children.length > 0 ? (children[children.length - 1] ?? null) : null
+  if (children.length === 0) {
+    return null
+  }
+  const last = children[children.length - 1]
+  return getOrElse<string | null>(() => null)(fromNullable(last))
 }
 
 type ContourDirection = 'left' | 'right'
@@ -234,14 +277,22 @@ const contourAtDepth = (
   let current = input.id
   let remainingDepth = input.depth
 
-  while (current !== null && remainingDepth > 0) {
-    const s = input.scratch.get(current)!
-    const nextChild = childByDirection(current, input.direction, input.nodes)
-    if (s.childCount > 0 && nextChild !== null) {
-      current = nextChild
+  while (remainingDepth > 0) {
+    const currentOption = fromNullable(current)
+    if (isNone(currentOption)) {
+      return null
+    }
+
+    const currentId = currentOption.value
+    const s = input.scratch.get(currentId)!
+    const nextChild = childByDirection(currentId, input.direction, input.nodes)
+    const nextChildOption = fromNullable(nextChild)
+    const threadOption = fromNullable(s.thread)
+    if (s.childCount > 0 && !isNone(nextChildOption)) {
+      current = nextChildOption.value
       remainingDepth -= 1
-    } else if (s.thread !== null) {
-      current = s.thread
+    } else if (!isNone(threadOption)) {
+      current = threadOption.value
       remainingDepth -= 1
     } else {
       return null
@@ -285,9 +336,12 @@ const leftSibling = (
 ): string | null => {
   // DEVIATION(1.6): Parent/child indexing invariants are established during index construction.
   const node = nodes.get(id)!
-  if (node.parentId === null || node.childIndex === 0) return null
-  const sibling = nodes.get(node.parentId)!.children[node.childIndex - 1]
-  return sibling ?? null
+  const parentIdOption = fromNullable(node.parentId)
+  if (!isNone(parentIdOption) && node.childIndex > 0) {
+    const sibling = nodes.get(parentIdOption.value)!.children[node.childIndex - 1]
+    return getOrElse<string | null>(() => null)(fromNullable(sibling))
+  }
+  return null
 }
 
 // ---------------------------------------------------------------------------
@@ -349,17 +403,27 @@ const advanceApportionState = (
   // DEVIATION(1.6): Loop guard in APPORTION ensures rightNext/leftNext are non-null before this helper runs.
   const vim = input.state.rightNext!
   const vip = input.state.leftNext!
-  const vom = input.state.vom !== null
-    ? leftmost({ id: input.state.vom, depth: 1, nodes: input.nodes, scratch: input.scratch }) ?? input.state.vom
+  const vomOption = fromNullable(input.state.vom)
+  const vom = !isNone(vomOption)
+    ? nextContourOrSelf(
+      leftmost({ id: vomOption.value, depth: 1, nodes: input.nodes, scratch: input.scratch }),
+      vomOption.value
+    )
     : input.state.vom
-  const vop = input.state.vop !== null
-    ? rightmost({ id: input.state.vop, depth: 1, nodes: input.nodes, scratch: input.scratch }) ?? input.state.vop
+  const vopOption = fromNullable(input.state.vop)
+  const vop = !isNone(vopOption)
+    ? nextContourOrSelf(
+      rightmost({ id: vopOption.value, depth: 1, nodes: input.nodes, scratch: input.scratch }),
+      vopOption.value
+    )
     : input.state.vop
 
-  if (vop !== null) {
-    const scratchVop = mutableScratchOf(input.scratch, vop)
-    if (scratchVop !== undefined) {
-      scratchVop.ancestor = input.v
+  const nextVopOption = fromNullable(vop)
+  if (!isNone(nextVopOption)) {
+    const scratchVop = mutableScratchOf(input.scratch, nextVopOption.value)
+    const scratchVopOption = fromNullable(scratchVop)
+    if (!isNone(scratchVopOption)) {
+      scratchVopOption.value.ancestor = input.v
     }
   }
 
@@ -378,6 +442,8 @@ const advanceApportionState = (
 
   const sipShifted = input.state.sip + appliedShift
   const sopShifted = input.state.sop + appliedShift
+  const resolvedVomOption = fromNullable(vom)
+  const resolvedVopOption = fromNullable(vop)
   return {
     vip,
     vop,
@@ -385,8 +451,8 @@ const advanceApportionState = (
     vom,
     sim: input.state.sim + input.scratch.get(vim)!.mod,
     sip: sipShifted + input.scratch.get(vip)!.mod,
-    som: vom !== null ? input.state.som + input.scratch.get(vom)!.mod : input.state.som,
-    sop: vop !== null ? sopShifted + input.scratch.get(vop)!.mod : sopShifted,
+    som: isNone(resolvedVomOption) ? input.state.som : input.state.som + input.scratch.get(resolvedVomOption.value)!.mod,
+    sop: isNone(resolvedVopOption) ? sopShifted : sopShifted + input.scratch.get(resolvedVopOption.value)!.mod,
     rightNext: rightmost({ id: vim, depth: 1, nodes: input.nodes, scratch: input.scratch }),
     leftNext: leftmost({ id: vip, depth: 1, nodes: input.nodes, scratch: input.scratch })
   }
@@ -398,56 +464,64 @@ const apportion = (
   input: ApportionInput
 ): string => {
   const w = leftSibling(input.v, input.nodes)
-  if (w === null) return input.defaultAncestor
-
-  const parentId = input.nodes.get(input.v)!.parentId
-  const initialState: ApportionState = {
-    vip: input.v,
-    vop: input.v,
-    vim: w,
-    vom: parentId !== null ? firstChildId(parentId, input.nodes) : input.v,
-    sip: input.scratch.get(input.v)!.mod,
-    sop: input.scratch.get(input.v)!.mod,
-    sim: input.scratch.get(w)!.mod,
-    som: parentId !== null ? input.scratch.get(firstChildId(parentId, input.nodes) ?? input.v)!.mod : input.scratch.get(input.v)!.mod,
-    rightNext: rightmost({ id: w, depth: 1, nodes: input.nodes, scratch: input.scratch }),
-    leftNext: leftmost({ id: input.v, depth: 1, nodes: input.nodes, scratch: input.scratch })
-  }
-
-  let state = initialState
-  while (state.rightNext !== null && state.leftNext !== null) {
-    state = advanceApportionState({
-      state,
-      v: input.v,
-      defaultAncestor: input.defaultAncestor,
-      nodes: input.nodes,
-      scratch: input.scratch
-    })
-  }
-
-  const finalState = state
-
-  if (finalState.rightNext !== null && (
-    finalState.vop === null || rightmost({ id: finalState.vop, depth: 1, nodes: input.nodes, scratch: input.scratch }) === null
-  )) {
-    const target = finalState.vop ?? input.v
-    const scratchTarget = mutableScratchOf(input.scratch, target)
-    if (scratchTarget !== undefined) {
-      scratchTarget.thread = finalState.rightNext
-      scratchTarget.mod += finalState.sim - finalState.sop
+  const wOption = fromNullable(w)
+  if (!isNone(wOption)) {
+    const parentId = input.nodes.get(input.v)!.parentId
+    const parentIdOption = fromNullable(parentId)
+    const firstParentChild = isNone(parentIdOption) ? null : firstChildId(parentIdOption.value, input.nodes)
+    const somNodeId = getOrElse<string>(() => input.v)(fromNullable(firstParentChild))
+    const initialState: ApportionState = {
+      vip: input.v,
+      vop: input.v,
+      vim: wOption.value,
+      vom: isNone(parentIdOption) ? input.v : firstChildId(parentIdOption.value, input.nodes),
+      sip: input.scratch.get(input.v)!.mod,
+      sop: input.scratch.get(input.v)!.mod,
+      sim: input.scratch.get(wOption.value)!.mod,
+      som: isNone(parentIdOption) ? input.scratch.get(input.v)!.mod : input.scratch.get(somNodeId)!.mod,
+      rightNext: rightmost({ id: wOption.value, depth: 1, nodes: input.nodes, scratch: input.scratch }),
+      leftNext: leftmost({ id: input.v, depth: 1, nodes: input.nodes, scratch: input.scratch })
     }
-  }
 
-  if (finalState.leftNext !== null && (
-    finalState.vom === null || leftmost({ id: finalState.vom, depth: 1, nodes: input.nodes, scratch: input.scratch }) === null
-  )) {
-    const target = finalState.vom ?? input.v
-    const scratchTarget = mutableScratchOf(input.scratch, target)
-    if (scratchTarget !== undefined) {
-      scratchTarget.thread = finalState.leftNext
-      scratchTarget.mod += finalState.sip - finalState.som
+    let state = initialState
+    while (!isNone(fromNullable(state.rightNext)) && !isNone(fromNullable(state.leftNext))) {
+      state = advanceApportionState({
+        state,
+        v: input.v,
+        defaultAncestor: input.defaultAncestor,
+        nodes: input.nodes,
+        scratch: input.scratch
+      })
     }
-    return input.v
+
+    const finalState = state
+
+    if (!isNone(fromNullable(finalState.rightNext)) && (
+      !isNone(fromNullable(finalState.vop)) && !isNone(fromNullable(rightmost({ id: finalState.vop, depth: 1, nodes: input.nodes, scratch: input.scratch })))
+    ) === false) {
+      const target = getOrElse<string>(() => input.v)(fromNullable(finalState.vop))
+      const scratchTarget = mutableScratchOf(input.scratch, target)
+      const scratchTargetOption = fromNullable(scratchTarget)
+      if (!isNone(scratchTargetOption)) {
+        scratchTargetOption.value.thread = finalState.rightNext
+        scratchTargetOption.value.mod += finalState.sim - finalState.sop
+      }
+    }
+
+    if (!isNone(fromNullable(finalState.leftNext)) && (
+      !isNone(fromNullable(finalState.vom)) && !isNone(fromNullable(leftmost({ id: finalState.vom, depth: 1, nodes: input.nodes, scratch: input.scratch })))
+    ) === false) {
+      const target = getOrElse<string>(() => input.v)(fromNullable(finalState.vom))
+      const scratchTarget = mutableScratchOf(input.scratch, target)
+      const scratchTargetOption = fromNullable(scratchTarget)
+      if (!isNone(scratchTargetOption)) {
+        scratchTargetOption.value.thread = finalState.leftNext
+        scratchTargetOption.value.mod += finalState.sip - finalState.som
+      }
+      return input.v
+    }
+
+    return input.defaultAncestor
   }
 
   return input.defaultAncestor
@@ -467,7 +541,8 @@ const firstWalk = (
 
   if (children.length === 0) {
     const leftSib = leftSibling(input.v, input.nodes)
-    s.prelim = leftSib !== null ? input.scratch.get(leftSib)!.prelim + 1 : 0
+    const leftSibOption = fromNullable(leftSib)
+    s.prelim = isNone(leftSibOption) ? 0 : input.scratch.get(leftSibOption.value)!.prelim + 1
     return
   }
 
@@ -481,8 +556,9 @@ const firstWalk = (
   const midpoint = childMidpoint(children, input.scratch)
 
   const leftSib = leftSibling(input.v, input.nodes)
-  if (leftSib !== null) {
-    s.prelim = input.scratch.get(leftSib)!.prelim + 1
+  const leftSibOption = fromNullable(leftSib)
+  if (!isNone(leftSibOption)) {
+    s.prelim = input.scratch.get(leftSibOption.value)!.prelim + 1
     s.mod = s.prelim - midpoint
   } else {
     s.prelim = midpoint
