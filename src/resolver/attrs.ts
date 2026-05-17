@@ -1,3 +1,12 @@
+/**
+ * @module resolver/attrs
+ *
+ * Provide typed AST attribute lookup helpers used by semantic resolvers.
+ *
+ * @packageDocumentation
+ */
+
+import { fromNullable, isNone } from '@tsfpp/prelude'
 import type { AstAttr } from '../types/ast'
 
 const findAttrByKey = (key: string, attrs: readonly AstAttr[]): AstAttr | undefined =>
@@ -11,12 +20,12 @@ const findAttrByKey = (key: string, attrs: readonly AstAttr[]): AstAttr | undefi
  * @returns The string value when the attribute exists and its value is typed as a string literal; otherwise `undefined`.
  */
 export const findStringAttrValue = (key: string, attrs: readonly AstAttr[]): string | undefined => {
-  const attr = findAttrByKey(key, attrs)
-  if (attr === undefined) return undefined
-  if (attr.value.kind !== 'string') {
+  const attrOption = fromNullable(findAttrByKey(key, attrs))
+  if (isNone(attrOption)) return undefined
+  if (attrOption.value.value.kind !== 'string') {
     return undefined
   }
-  return attr.value.value
+  return attrOption.value.value.value
 }
 
 /**
@@ -27,12 +36,12 @@ export const findStringAttrValue = (key: string, attrs: readonly AstAttr[]): str
  * @returns The numeric value when the attribute exists and its value is typed as a number literal; otherwise `undefined`.
  */
 export const findNumberAttrValue = (key: string, attrs: readonly AstAttr[]): number | undefined => {
-  const attr = findAttrByKey(key, attrs)
-  if (attr === undefined) return undefined
-  if (attr.value.kind !== 'number') {
+  const attrOption = fromNullable(findAttrByKey(key, attrs))
+  if (isNone(attrOption)) return undefined
+  if (attrOption.value.value.kind !== 'number') {
     return undefined
   }
-  return attr.value.value
+  return attrOption.value.value.value
 }
 
 /**

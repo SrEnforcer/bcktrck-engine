@@ -6,9 +6,18 @@
  */
 
 import type { Option } from '@tsfpp/prelude'
-import { some, none } from '@tsfpp/prelude'
+import { fromNullable, getOrElse, isNone, none, some } from '@tsfpp/prelude'
 import type { Token, TokenKind } from '../lexer/tokens'
 import type { ParseResult } from '../types/results'
+
+const lineOrZero = (token: Token | undefined): number =>
+  getOrElse<number>(() => 0)(fromNullable(token?.line))
+
+const colOrZero = (token: Token | undefined): number =>
+  getOrElse<number>(() => 0)(fromNullable(token?.col))
+
+const tokenKindOrEof = (token: Token | undefined): TokenKind | 'eof' =>
+  getOrElse<TokenKind | 'eof'>(() => 'eof')(fromNullable(token?.kind))
 
 /**
  * A parser takes a token stream and returns a ParseResult.
@@ -76,18 +85,18 @@ export const seq = <A, B>(first: Parser<A>, second: Parser<B>): Parser<readonly 
 export const choice = <T>(...parsers: readonly Parser<T>[]): Parser<T> => {
   return (tokens) => {
     const tryParserAt = (index: number, errors: readonly string[]): ParseResult<T> => {
-      const parser = parsers[index]
-      if (parser === undefined) {
+      const parserOption = fromNullable(parsers[index])
+      if (isNone(parserOption)) {
         const first = tokens[0]
         return {
           ok: false,
           error: `No alternative matched: ${errors.join(' | ')}`,
-          line: first?.line ?? 0,
-          col: first?.col ?? 0
+          line: lineOrZero(first),
+          col: colOrZero(first)
         }
       }
 
-      const result = parser(tokens)
+      const result = parserOption.value(tokens)
       return result.ok ? result : tryParserAt(index + 1, [...errors, result.error])
     }
 
@@ -119,8 +128,8 @@ export const many = <T>(parser: Parser<T>): Parser<readonly T[]> => {
         return {
           ok: false,
           error: 'Parser in many() did not consume input',
-          line: result.rest[0]?.line ?? 0,
-          col: result.rest[0]?.col ?? 0
+          line: lineOrZero(result.rest[0]),
+          col: colOrZero(result.rest[0])
         }
       }
 
@@ -166,19 +175,20 @@ export const opt = <T>(parser: Parser<T>): Parser<Option<T>> => {
 export const token = (kind: TokenKind): Parser<Token> => {
   return (tokens) => {
     const current = tokens[0]
-    if (current?.kind === kind) {
+    const currentOption = fromNullable(current)
+    if (tokenKindOrEof(current) === kind && !isNone(currentOption)) {
       return {
         ok: true,
-        value: current,
+        value: currentOption.value,
         rest: tokens.slice(1)
       }
     }
 
     return {
       ok: false,
-      error: `Expected ${kind}, got ${current?.kind ?? 'eof'}`,
-      line: current?.line ?? 0,
-      col: current?.col ?? 0
+      error: `Expected ${kind}, got ${tokenKindOrEof(current)}`,
+      line: lineOrZero(current),
+      col: colOrZero(current)
     }
   }
 }

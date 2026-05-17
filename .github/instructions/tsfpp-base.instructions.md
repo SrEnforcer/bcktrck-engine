@@ -21,6 +21,9 @@ Full standard: `node_modules/@tsfpp/standard/spec/CODING_STANDARD.md`
 - Optional params `?` — use `Option<T>` or a defaults record
 - `default:` in an exhaustive switch — use `absurd(x)` instead
 - `import from 'ramda'` — use `@tsfpp/prelude`
+- `new Map()` `new Set()` — use `intoMap` / `intoSet` from `@tsfpp/prelude`
+- `if (x === null)` `if (x !== null)` `if (x === undefined)` `if (x !== undefined)` `if (!x)` `x ?? y` — any nullability check in any form; use `fromNullable` → `Option<T>`, then `isSome` / `isNone` / `getOrElse`
+- `try/catch` in core — use `tryCatch` / `tryCatchAsync` from `@tsfpp/prelude`
 
 ## Always
 
@@ -46,7 +49,7 @@ Full standard: `node_modules/@tsfpp/standard/spec/CODING_STANDARD.md`
 ## ADT patterns
 
 ```ts
-// Sum type
+// Sum type — domain ADTs use `kind`
 type Shape =
   | { readonly kind: 'circle'; readonly radius: number }
   | { readonly kind: 'rect';   readonly width: number; readonly height: number }
@@ -58,21 +61,29 @@ switch (shape.kind) {
   default:       return absurd(shape)
 }
 
-// Branded type
+// Branded type — `as` only inside the smart constructor guard body
 type UserId = Brand<string, 'UserId'>
-const mkUserId = brand<string, 'UserId'>(
-  s => /^[a-z0-9-]+$/.test(s),
-  s => `Invalid UserId: ${s}`,
-)
+const mkUserId = (raw: string): Option<UserId> =>
+  raw.length > 0
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- DEVIATION(1.6): smart-constructor body
+    ? some(raw as UserId)
+    : none
 
 // Total function
 const head = <A>(xs: ReadonlyArray<A>): Option<A> =>
   xs.length > 0 ? some(xs[0] as A) : none
 ```
 
+## Discriminant convention
+
+| ADT origin | Field | Example |
+|---|---|---|
+| `@tsfpp/prelude` (Result, Option) | `_tag` | accessed via guards only — never `x._tag === 'Ok'` |
+| Domain ADTs | `kind` | `{ kind: 'pending'; ... }` |
+
 ## Imports
 
-All ADT constructors (`some`, `none`, `ok`, `err`), combinators (`map`, `flatMap`, `pipe`, `prop`, …), and Ramda re-exports come from `@tsfpp/prelude`. Never import from `ramda` directly.
+All ADT constructors, combinators, and utilities come from `@tsfpp/prelude`. Never import from `ramda` directly.
 
 ## Markers
 

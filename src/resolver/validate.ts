@@ -1,4 +1,12 @@
 /**
+ * @module resolver/validate
+ *
+ * Validate semantic references and constrained attributes across resolved AST nodes.
+ *
+ * @packageDocumentation
+ */
+
+/**
  * AST reference validator: ensures all semantic constraints are satisfied.
  *
  * Validates:
@@ -10,7 +18,7 @@
  * Returns structured errors with line/col info and suggestions for misspellings.
  */
 
-import { assoc, intoMap } from '@tsfpp/prelude'
+import { assoc, fromNullable, getOrElse, intoMap, isNone } from '@tsfpp/prelude'
 import type { AstOrg } from '../types/ast'
 import type { ResolveError } from '../types/results'
 import type { HandleEntry } from './handles'
@@ -20,6 +28,9 @@ import { collectNodes } from './tree'
 const numberRange = (startInclusive: number, endExclusive: number): ReadonlyArray<number> =>
   Array.from({ length: Math.max(0, endExclusive - startInclusive) }, (_value, index) => startInclusive + index)
 
+const indexOr = (values: ReadonlyArray<number>, index: number, fallback: number): number =>
+  getOrElse<number>(() => fallback)(fromNullable(values[index]))
+
 const levenshtein = (a: string, b: string): number => {
   const m = a.length
   const n = b.length
@@ -28,14 +39,14 @@ const levenshtein = (a: string, b: string): number => {
       (row, j) => [
         ...row,
         a[i - 1] === b[j - 1]
-          ? (prev[j - 1] ?? 0)
-          : 1 + Math.min(prev[j] ?? 0, row[row.length - 1] ?? 0, prev[j - 1] ?? 0)
+          ? indexOr(prev, j - 1, 0)
+          : 1 + Math.min(indexOr(prev, j, 0), indexOr(row, row.length - 1, 0), indexOr(prev, j - 1, 0))
       ],
       [i]
     )
 
   const firstRow = numberRange(0, n + 1)
-  return numberRange(1, m + 1).reduce<readonly number[]>((prev, i) => buildRow(prev, i), firstRow)[n] ?? 0
+  return indexOr(numberRange(1, m + 1).reduce<readonly number[]>((prev, i) => buildRow(prev, i), firstRow), n, 0)
 }
 
 const MAX_SUGGESTION_DISTANCE = 2
@@ -57,8 +68,9 @@ const getDistance = (
 ): { readonly distance: number; readonly memo: DistanceMemo } => {
   const key = distanceMemoKey(target, candidate)
   const cached = memo.get(key)
-  if (cached !== undefined) {
-    return { distance: cached, memo }
+  const cachedOption = fromNullable(cached)
+  if (!isNone(cachedOption)) {
+    return { distance: cachedOption.value, memo }
   }
 
   const distance = levenshtein(target, candidate)
@@ -98,13 +110,18 @@ type UnknownHandleErrorInput = {
   readonly suggestion: string | undefined
 }
 
+const optionalSuggestion = (suggestion: string | undefined): { readonly suggestion?: string } => {
+  const suggestionOption = fromNullable(suggestion)
+  return isNone(suggestionOption) ? {} : { suggestion: suggestionOption.value }
+}
+
 const buildUnknownHandleError = (input: UnknownHandleErrorInput): ResolveError => ({
   kind: 'unknown_handle',
   handle: input.handle,
   line: input.line,
   col: input.col,
   message: `Unknown handle '${input.handle}'`,
-  ...(input.suggestion !== undefined ? { suggestion: input.suggestion } : {})
+  ...optionalSuggestion(input.suggestion)
 })
 
 const buildDuplicateHandleError = (handle: string, line: number, col: number): ResolveError => ({
@@ -199,7 +216,16 @@ const resolveNodeHandle = (
   node: AstOrg['root'],
   nodeToHandle: ReadonlyMap<AstOrg['root'], string>,
   fallback: string
-): string => nodeToHandle.get(node) ?? node.handle ?? node.displayName ?? fallback
+): string => {
+  const mappedHandleOption = fromNullable(nodeToHandle.get(node))
+  if (!isNone(mappedHandleOption)) return mappedHandleOption.value
+
+  const explicitHandleOption = fromNullable(node.handle)
+  if (!isNone(explicitHandleOption)) return explicitHandleOption.value
+
+  const displayNameOption = fromNullable(node.displayName)
+  return isNone(displayNameOption) ? fallback : displayNameOption.value
+}
 
 const validateDuplicateHandles = (
   duplicates: readonly { readonly handle: string; readonly node: AstOrg['root'] }[]
@@ -249,7 +275,8 @@ const validateStaffSide = (
     .filter((node) => node.kind === 'staff')
     .flatMap((node) => {
       const side = findStringAttrValue('side', node.attrs)
-      if (side === undefined || side === 'left' || side === 'right') return []
+      const sideOption = fromNullable(side)
+      if (isNone(sideOption) || sideOption.value === 'left' || sideOption.value === 'right') return []
       const handle = resolveNodeHandle(node, nodeToHandle, 'staff')
       return [buildInvalidSideError(handle, node.line, node.col)]
     })
@@ -264,7 +291,7 @@ const validateDepartmentHead = (
     .reduce<ValidationState>((state, node) => {
       const handle = resolveNodeHandle(node, nodeToHandle, 'dept')
       const headHandle = findHandleRefAttrValue('head', node.attrs)
-      const hasHeadAttr = findStringAttrValue('head', node.attrs) !== undefined
+      const hasHeadAttr = !isNone(fromNullable(findStringAttrValue('head', node.attrs)))
 
       if (!hasHeadAttr) {
         const hasNonDeptMember = node.children.some((child) => child.kind !== 'dept')
@@ -273,15 +300,16 @@ const validateDepartmentHead = (
           : { ...state, errors: [...state.errors, buildMissingHeadError(handle, node.line, node.col)] }
       }
 
-      if (headHandle === undefined) {
+      const headHandleOption = fromNullable(headHandle)
+      if (isNone(headHandleOption)) {
         return { ...state, errors: [...state.errors, buildInvalidHeadError(handle, node.line, node.col)] }
       }
 
-      if (handleMap.has(headHandle)) return state
-      const suggestion = closestHandle(headHandle, handleMap, state.memo)
+      if (handleMap.has(headHandleOption.value)) return state
+      const suggestion = closestHandle(headHandleOption.value, handleMap, state.memo)
       return {
         errors: [...state.errors, buildUnknownHandleError({
-          handle: headHandle,
+          handle: headHandleOption.value,
           line: node.line,
           col: node.col,
           suggestion: suggestion.handle
@@ -300,39 +328,51 @@ type ValidateShadowNodeInput = {
   readonly handleMap: ReadonlyMap<string, HandleEntry>
 }
 
+const hasInvalidShadowType = (normalizedType: string | undefined): boolean => {
+  const normalizedTypeOption = fromNullable(normalizedType)
+  return !isNone(normalizedTypeOption) && normalizedTypeOption.value !== 'employee' && normalizedTypeOption.value !== 'staff'
+}
+
+const hasInvalidShadowSide = (normalizedType: string | undefined, normalizedSide: string | undefined): boolean => {
+  const normalizedSideOption = fromNullable(normalizedSide)
+  return normalizedType === 'staff'
+    && !isNone(normalizedSideOption)
+    && normalizedSideOption.value !== 'left'
+    && normalizedSideOption.value !== 'right'
+}
+
 const resolveShadowType = (node: AstOrg['root']): string | undefined =>
   findStringAttrValue('type', node.attrs)?.trim().toLowerCase()
 
 const resolveShadowSide = (node: AstOrg['root']): string | undefined =>
   findStringAttrValue('side', node.attrs)?.trim().toLowerCase()
 
-// DEVIATION(4.4): A single ordered semantic guard chain keeps shadow validation diagnostics deterministic and clearer than splitting into tiny helpers.
-// eslint-disable-next-line complexity -- shadow validation intentionally checks independent semantic constraints in boundary order.
 const validateShadowNode = (input: ValidateShadowNodeInput): ValidationState => {
   const handle = resolveNodeHandle(input.node, input.nodeToHandle, 'shadow')
   const primaryHandle = findHandleRefAttrValue('primary', input.node.attrs)
-  const hasPrimaryAttr = findStringAttrValue('primary', input.node.attrs) !== undefined
+  const hasPrimaryAttr = !isNone(fromNullable(findStringAttrValue('primary', input.node.attrs)))
+  const primaryHandleOption = fromNullable(primaryHandle)
 
-  if (!hasPrimaryAttr || primaryHandle === undefined) {
+  if (!hasPrimaryAttr || isNone(primaryHandleOption)) {
     return { ...input.state, errors: [...input.state.errors, buildInvalidShadowPrimaryError(handle, input.node.line, input.node.col)] }
   }
 
   const normalizedType = resolveShadowType(input.node)
-  if (normalizedType !== undefined && normalizedType !== 'employee' && normalizedType !== 'staff') {
+  if (hasInvalidShadowType(normalizedType)) {
     return { ...input.state, errors: [...input.state.errors, buildInvalidShadowTypeError(handle, input.node.line, input.node.col)] }
   }
 
   const normalizedSide = resolveShadowSide(input.node)
-  if (normalizedType === 'staff' && normalizedSide !== undefined && normalizedSide !== 'left' && normalizedSide !== 'right') {
+  if (hasInvalidShadowSide(normalizedType, normalizedSide)) {
     return { ...input.state, errors: [...input.state.errors, buildInvalidShadowSideError(handle, input.node.line, input.node.col)] }
   }
 
-  const primaryEntry = input.handleMap.get(primaryHandle)
-  if (primaryEntry === undefined) {
-    const suggestion = closestHandle(primaryHandle, input.handleMap, input.state.memo)
+  const primaryEntryOption = fromNullable(input.handleMap.get(primaryHandleOption.value))
+  if (isNone(primaryEntryOption)) {
+    const suggestion = closestHandle(primaryHandleOption.value, input.handleMap, input.state.memo)
     return {
       errors: [...input.state.errors, buildUnknownHandleError({
-        handle: primaryHandle,
+        handle: primaryHandleOption.value,
         line: input.node.line,
         col: input.node.col,
         suggestion: suggestion.handle
@@ -341,7 +381,7 @@ const validateShadowNode = (input: ValidateShadowNodeInput): ValidationState => 
     }
   }
 
-  if (primaryEntry.node.kind === 'shadow') {
+  if (primaryEntryOption.value.node.kind === 'shadow') {
     return { ...input.state, errors: [...input.state.errors, buildShadowPrimaryMustBeNonShadowError(handle, input.node.line, input.node.col)] }
   }
 

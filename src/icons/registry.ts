@@ -31,6 +31,7 @@ import {
   BadgeCheck,
   type IconNode as LucideIconNode
 } from 'lucide'
+import { intoMap, intoSet } from '@tsfpp/prelude'
 
 
 // Use Lucide's IconNode type directly for compatibility
@@ -48,12 +49,9 @@ export type IconPos =
   | 'bottom-left'
   | 'bottom-right'
 
-// DEVIATION(1.9): Immutable collection construction requires creating fresh Set/Map instances from static entries.
-// eslint-disable-next-line no-restricted-syntax
-const setFromValues = <T>(values: ReadonlyArray<T>): ReadonlySet<T> => new Set(values)
+const setFromValues = <T>(values: ReadonlyArray<T>): ReadonlySet<T> => intoSet(values)
 
-// eslint-disable-next-line no-restricted-syntax
-const mapFromEntries = <K, V>(entries: ReadonlyArray<readonly [K, V]>): ReadonlyMap<K, V> => new Map(entries)
+const mapFromEntries = <K, V>(entries: ReadonlyArray<readonly [K, V]>): ReadonlyMap<K, V> => intoMap(entries)
 
 export const ICON_POSITIONS: ReadonlySet<string> = setFromValues<IconPos>([
   'upper-left', 'upper-right',

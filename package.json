@@ -4,7 +4,7 @@
   "description": "bcktrck engine for parsing BTL org definitions, resolving hierarchy semantics, and rendering organizational charts as SVG",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src",
     "postinstall": "node node_modules/@tsfpp/agents/init.mjs --yes"
@@ -24,14 +24,16 @@
   "license": "ISC",
   "packageManager": "pnpm@11.1.2+sha512.415a1cc25974731e75455c1468371be74c5aa5fb7621b50d4056d222451609f11412f23fd602e6169f1e060466641f798597e1be961a10688836a67b16569499",
   "devDependencies": {
-    "@tsfpp/workflow": "^1.0.0",
-    "@tsfpp/agents": "^1.2.2",
+    "@tsfpp/agents": "^1.3.3",
     "@tsfpp/boundary": "^1.0.1",
     "@tsfpp/eslint-config": "^1.0.1",
-    "@tsfpp/standard": "^1.0.0",
+    "@tsfpp/standard": "^1.1.0",
     "@tsfpp/tsconfig": "^1.0.0",
+    "@tsfpp/workflow": "^1.0.0",
     "@types/node": "^25.8.0",
-    "typescript": "^6.0.3"
+    "fast-check": "^4.8.0",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.6"
   },
   "type": "module",
   "dependencies": {

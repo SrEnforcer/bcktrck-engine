@@ -115,7 +115,9 @@ If a function exceeds 40 lines, cyclomatic complexity 10, or nesting depth 4: de
 ## Execution workflow
 
 **Step 1 — Read the report**
-Parse the audit report. Build a todo list of all open violations grouped by slice. Confirm with the user before proceeding.
+Parse the audit report. Build a todo list of all open violations grouped by slice. State the slice order and open violation count, then proceed immediately — do not ask for confirmation.
+
+> **Do not suggest handoffs or pause between slices.** Work through all violations without interruption. Intermediate lint/typecheck runs and report updates are expected and correct. Only present handoff options after every violation is resolved and the report is marked complete.
 
 **Step 2 — Work slice by slice**
 For each slice with open violations:

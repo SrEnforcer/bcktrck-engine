@@ -1,6 +1,17 @@
+/**
+ * @module layout/apply-layout-hints
+ *
+ * Applies hanging-layout hints to an indexed layout by repositioning hinted child
+ * branches and then compacting/re-centering affected sibling groups.
+ *
+ * @packageDocumentation
+ */
+
+import { fromNullable, getOrElse, intoMap, isNone } from '@tsfpp/prelude'
 import type { IndexedNode, IndexedTree, LayoutPoint, PlacedTree } from './types'
 
 // DEVIATION(2.4): Layout hint placement logic remains in one module until lane and shift helpers are extracted.
+// NOTE(unknown, 2026-05-18): Hanging-branch compaction intentionally remains local until lane and subtree-span helpers are split.
 
 type LaneAndSideResult = {
   readonly lane: number
@@ -76,9 +87,7 @@ type ApplyNodeHintChildInput = {
   readonly state: ApplyNodeHintState
 }
 
-// DEVIATION(1.9): Immutable Map construction is required to return new map values without mutating existing state.
-// eslint-disable-next-line no-restricted-syntax
-const mapFromEntries = <K, V>(entries: ReadonlyArray<readonly [K, V]>): ReadonlyMap<K, V> => new Map(entries)
+const mapFromEntries = <K, V>(entries: ReadonlyArray<readonly [K, V]>): ReadonlyMap<K, V> => intoMap(entries)
 
 const mapClone = <K, V>(source: ReadonlyMap<K, V>): ReadonlyMap<K, V> =>
   mapFromEntries(Array.from(source.entries()).map(([key, value]) => [key, value] as const))
@@ -94,35 +103,36 @@ const isHangingHint = (hint: IndexedNode['layoutHint']): hint is HangingHint =>
 
 const collectSubtreeIds = (nodeId: string, tree: IndexedTree): readonly string[] => {
   const node = tree.nodes.get(nodeId)
-  if (node === undefined) {
-    return [nodeId]
+  const nodeOption = fromNullable(node)
+  if (!isNone(nodeOption)) {
+    return [nodeId, ...nodeOption.value.children.flatMap((childId) => collectSubtreeIds(childId, tree))]
   }
-
-  return [nodeId, ...node.children.flatMap((childId) => collectSubtreeIds(childId, tree))]
+  return [nodeId]
 }
 
 const shiftSubtree = (input: ShiftSubtreeInput): ReadonlyMap<string, LayoutPoint> =>
   collectSubtreeIds(input.nodeId, input.tree).reduce((nextPositions, id) => {
     const pos = nextPositions.get(id)
-    if (pos === undefined) {
-      return nextPositions
+    const posOption = fromNullable(pos)
+    if (!isNone(posOption)) {
+      return mapWithEntry(nextPositions, id, { x: posOption.value.x + input.dx, y: posOption.value.y + input.dy })
     }
-
-    return mapWithEntry(nextPositions, id, { x: pos.x + input.dx, y: pos.y + input.dy })
+    return nextPositions
   }, input.positions)
 
 const laneAndSide = (input: LaneAndSideInput): { readonly lane: number; readonly side: -1 | 1 } => {
-  const overriddenSide = input.sideOverride === 'left'
+  const overriddenSide: -1 | 1 | undefined = input.sideOverride === 'left'
     ? -1
     : input.sideOverride === 'right'
       ? 1
       : undefined
+  const overriddenSideOption = fromNullable(overriddenSide)
 
   if (input.hint === 'hanging-left') {
-    return { lane: input.index, side: overriddenSide ?? -1 }
+    return { lane: input.index, side: getOrElse<-1 | 1>(() => -1)(overriddenSideOption) }
   }
 
-  return { lane: input.index, side: overriddenSide ?? 1 }
+  return { lane: input.index, side: getOrElse<-1 | 1>(() => 1)(overriddenSideOption) }
 }
 
 const resolveBothSideHint = (input: ResolveBothSideHintInput): LaneAndSideResult => {
@@ -154,40 +164,40 @@ const resolveOneSideHint = (input: ResolveOneSideHintInput): LaneAndSideResult =
 
 const applyNodeHintChild = (input: ApplyNodeHintChildInput): ApplyNodeHintState => {
   const childPos = input.state.positions.get(input.childId)
+  const childPosOption = fromNullable(childPos)
   const childNode = input.tree.nodes.get(input.childId)
-  if (childPos === undefined) {
-    return input.state
-  }
+  if (!isNone(childPosOption)) {
+    const sideOverride = childNode?.hangingSide
+    const result = input.hint === 'hanging-both'
+      ? resolveBothSideHint({
+        index: input.index,
+        sideOverride,
+        leftLane: input.state.leftLane,
+        rightLane: input.state.rightLane
+      })
+      : resolveOneSideHint({
+        hint: input.hint,
+        index: input.index,
+        sideOverride,
+        leftLane: input.state.leftLane,
+        rightLane: input.state.rightLane
+      })
 
-  const sideOverride = childNode?.hangingSide
-  const result = input.hint === 'hanging-both'
-    ? resolveBothSideHint({
-      index: input.index,
-      sideOverride,
-      leftLane: input.state.leftLane,
-      rightLane: input.state.rightLane
-    })
-    : resolveOneSideHint({
-      hint: input.hint,
-      index: input.index,
-      sideOverride,
-      leftLane: input.state.leftLane,
-      rightLane: input.state.rightLane
-    })
-
-  const targetX = input.parentPos.x + result.side
-  const targetY = input.parentPos.y + result.lane + 1
-  return {
-    positions: shiftSubtree({
-      nodeId: input.childId,
-      dx: targetX - childPos.x,
-      dy: targetY - childPos.y,
-      tree: input.tree,
-      positions: input.state.positions
-    }),
-    leftLane: result.nextLeftLane,
-    rightLane: result.nextRightLane
+    const targetX = input.parentPos.x + result.side
+    const targetY = input.parentPos.y + result.lane + 1
+    return {
+      positions: shiftSubtree({
+        nodeId: input.childId,
+        dx: targetX - childPosOption.value.x,
+        dy: targetY - childPosOption.value.y,
+        tree: input.tree,
+        positions: input.state.positions
+      }),
+      leftLane: result.nextLeftLane,
+      rightLane: result.nextRightLane
+    }
   }
+  return input.state
 }
 
 const applyNodeHint = (
@@ -196,29 +206,32 @@ const applyNodeHint = (
   positions: ReadonlyMap<string, LayoutPoint>
 ): ReadonlyMap<string, LayoutPoint> => {
   const node = tree.nodes.get(nodeId)
-  const hint = node?.layoutHint
-  if (node === undefined || !isHangingHint(hint) || node.children.length === 0) {
-    return positions
+  const nodeOption = fromNullable(node)
+  if (!isNone(nodeOption)) {
+    const hint = nodeOption.value.layoutHint
+    if (!isHangingHint(hint) || nodeOption.value.children.length === 0) {
+      return positions
+    }
+
+    const parentPos = positions.get(nodeId)
+    const parentPosOption = fromNullable(parentPos)
+    if (!isNone(parentPosOption)) {
+      const initialState: ApplyNodeHintState = { positions, leftLane: 0, rightLane: 0 }
+
+      return nodeOption.value.children
+        .map((childId, index) => ({ childId, index }))
+        .reduce((state, child) => applyNodeHintChild({
+          childId: child.childId,
+          index: child.index,
+          hint,
+          tree,
+          parentPos: parentPosOption.value,
+          state
+        }), initialState)
+        .positions
+    }
   }
-
-  const parentPos = positions.get(nodeId)
-  if (parentPos === undefined) {
-    return positions
-  }
-
-  const initialState: ApplyNodeHintState = { positions, leftLane: 0, rightLane: 0 }
-
-  return node.children
-    .map((childId, index) => ({ childId, index }))
-    .reduce((state, child) => applyNodeHintChild({
-      childId: child.childId,
-      index: child.index,
-      hint,
-      tree,
-      parentPos,
-      state
-    }), initialState)
-    .positions
+  return positions
 }
 
 const walkPreOrder = (
@@ -228,14 +241,14 @@ const walkPreOrder = (
 ): ReadonlyMap<string, LayoutPoint> => {
   const afterNodeHint = applyNodeHint(nodeId, tree, positions)
   const node = tree.nodes.get(nodeId)
-  if (node === undefined) {
-    return afterNodeHint
+  const nodeOption = fromNullable(node)
+  if (!isNone(nodeOption)) {
+    return nodeOption.value.children.reduce(
+      (nextPositions, childId) => walkPreOrder(childId, tree, nextPositions),
+      afterNodeHint
+    )
   }
-
-  return node.children.reduce(
-    (nextPositions, childId) => walkPreOrder(childId, tree, nextPositions),
-    afterNodeHint
-  )
+  return afterNodeHint
 }
 
 const createSubtreeHangingIndex = (tree: IndexedTree): ReadonlyMap<string, boolean> => {
@@ -249,13 +262,13 @@ const createSubtreeHangingIndex = (tree: IndexedTree): ReadonlyMap<string, boole
     .reverse()
     .reduce((memo, nodeId) => {
       const node = tree.nodes.get(nodeId)
-      if (node === undefined) {
-        return mapWithEntry(memo, nodeId, false)
+      const nodeOption = fromNullable(node)
+      if (!isNone(nodeOption)) {
+        const selfHanging = isHangingHint(nodeOption.value.layoutHint)
+        const descendantHanging = nodeOption.value.children.some((childId) => memo.get(childId) === true)
+        return mapWithEntry(memo, nodeId, selfHanging || descendantHanging)
       }
-
-      const selfHanging = isHangingHint(node.layoutHint)
-      const descendantHanging = node.children.some((childId) => memo.get(childId) === true)
-      return mapWithEntry(memo, nodeId, selfHanging || descendantHanging)
+      return mapWithEntry(memo, nodeId, false)
     }, mapFromEntries<string, boolean>([]))
 }
 
@@ -265,8 +278,10 @@ const subtreeSpan = (
   positions: ReadonlyMap<string, LayoutPoint>
 ): { readonly minX: number; readonly maxX: number } | undefined => {
   const xs = collectSubtreeIds(nodeId, tree)
-    .map((id) => positions.get(id)?.x)
-    .filter((x): x is number => x !== undefined)
+    .flatMap((id) => {
+      const xOption = fromNullable(positions.get(id)?.x)
+      return isNone(xOption) ? [] : [xOption.value]
+    })
 
   if (xs.length === 0) {
     return undefined
@@ -277,40 +292,44 @@ const subtreeSpan = (
 
 const compactChildrenForNode = (input: CompactChildrenForNodeInput): ReadonlyMap<string, LayoutPoint> => {
   const node = input.tree.nodes.get(input.nodeId)
-  if (node === undefined || node.children.length < 2) {
-    return input.positions
-  }
+  const nodeOption = fromNullable(node)
+  if (!isNone(nodeOption) && nodeOption.value.children.length >= 2) {
+    // Re-pack sibling branches if any child subtree is hanging-driven.
+    const hasHangingChild = nodeOption.value.children.some((childId) => input.subtreeHasHanging.get(childId) === true)
+    if (!hasHangingChild) {
+      return input.positions
+    }
 
-  // Re-pack sibling branches if any child subtree is hanging-driven.
-  const hasHangingChild = node.children.some((childId) => input.subtreeHasHanging.get(childId) === true)
-  if (!hasHangingChild) {
-    return input.positions
-  }
+    const minSiblingGap = 1.2
+    const firstChildId = nodeOption.value.children[0]
+    const firstChildIdOption = fromNullable(firstChildId)
+    const initialSpan = isNone(firstChildIdOption)
+      ? undefined
+      : subtreeSpan(firstChildIdOption.value, input.tree, input.positions)
 
-  const minSiblingGap = 1.2
-  const firstChildId = node.children[0]
-  const initialSpan = firstChildId !== undefined ? subtreeSpan(firstChildId, input.tree, input.positions) : undefined
+    return nodeOption.value.children.slice(1).reduce(
+      (state, childId) => {
+        const span = subtreeSpan(childId, input.tree, state.positions)
+        const previousSpanOption = fromNullable(state.previousSpan)
+        const spanOption = fromNullable(span)
+        if (!isNone(previousSpanOption) && !isNone(spanOption)) {
+          const targetMinX = previousSpanOption.value.maxX + minSiblingGap
+          const dx = targetMinX - spanOption.value.minX
+          const shiftedPositions = Math.abs(dx) > 0.000001
+            ? shiftSubtree({ nodeId: childId, dx, dy: 0, tree: input.tree, positions: state.positions })
+            : state.positions
 
-  return node.children.slice(1).reduce(
-    (state, childId) => {
-      const span = subtreeSpan(childId, input.tree, state.positions)
-      if (state.previousSpan === undefined || span === undefined) {
+          return {
+            previousSpan: subtreeSpan(childId, input.tree, shiftedPositions),
+            positions: shiftedPositions
+          }
+        }
         return { previousSpan: span, positions: state.positions }
-      }
-
-      const targetMinX = state.previousSpan.maxX + minSiblingGap
-      const dx = targetMinX - span.minX
-      const shiftedPositions = Math.abs(dx) > 0.000001
-        ? shiftSubtree({ nodeId: childId, dx, dy: 0, tree: input.tree, positions: state.positions })
-        : state.positions
-
-      return {
-        previousSpan: subtreeSpan(childId, input.tree, shiftedPositions),
-        positions: shiftedPositions
-      }
-    },
-    { previousSpan: initialSpan, positions: input.positions }
-  ).positions
+      },
+      { previousSpan: initialSpan, positions: input.positions }
+    ).positions
+  }
+  return input.positions
 }
 
 const childXsForNode = (
@@ -318,77 +337,83 @@ const childXsForNode = (
   positions: ReadonlyMap<string, LayoutPoint>
 ): ReadonlyArray<number> =>
   node.children
-    .map((childId) => positions.get(childId)?.x)
-    .filter((x): x is number => x !== undefined)
+    .flatMap((childId) => {
+      const xOption = fromNullable(positions.get(childId)?.x)
+      return isNone(xOption) ? [] : [xOption.value]
+    })
 
 const medianX = (xs: ReadonlyArray<number>): number => {
   const sorted = [...xs].sort((a, b) => a - b)
   const middleIndex = Math.floor((sorted.length - 1) / 2)
+  const middle = sorted[middleIndex]
+  const upperMiddle = sorted[middleIndex + 1]
+  const middleOption = fromNullable(middle)
+  const upperMiddleOption = fromNullable(upperMiddle)
   return sorted.length % 2 === 1
-    ? (sorted[middleIndex] ?? 0)
-    : ((sorted[middleIndex] ?? 0) + (sorted[middleIndex + 1] ?? 0)) / 2
+    ? getOrElse<number>(() => 0)(middleOption)
+    : (getOrElse<number>(() => 0)(middleOption) + getOrElse<number>(() => 0)(upperMiddleOption)) / 2
 }
 
 const centerChildGroupUnderParent = (input: CenterChildGroupUnderParentInput): ReadonlyMap<string, LayoutPoint> => {
   const node = input.tree.nodes.get(input.nodeId)
   const parentPos = input.positions.get(input.nodeId)
-  if (node === undefined || parentPos === undefined || node.children.length === 0) {
-    return input.positions
+  const nodeOption = fromNullable(node)
+  const parentPosOption = fromNullable(parentPos)
+  if (!isNone(nodeOption) && !isNone(parentPosOption) && nodeOption.value.children.length > 0) {
+    const hasHangingChild = nodeOption.value.children.some((childId) => input.subtreeHasHanging.get(childId) === true)
+    if (!hasHangingChild) {
+      return input.positions
+    }
+
+    const childXs = childXsForNode(nodeOption.value, input.positions)
+
+    if (childXs.length === 0) {
+      return input.positions
+    }
+
+    const dx = parentPosOption.value.x - medianX(childXs)
+    if (Math.abs(dx) < 0.000001) {
+      return input.positions
+    }
+
+    return nodeOption.value.children.reduce(
+      (nextPositions, childId) => shiftSubtree({ nodeId: childId, dx, dy: 0, tree: input.tree, positions: nextPositions }),
+      input.positions
+    )
   }
-
-  const hasHangingChild = node.children.some((childId) => input.subtreeHasHanging.get(childId) === true)
-  if (!hasHangingChild) {
-    return input.positions
-  }
-
-  const childXs = childXsForNode(node, input.positions)
-
-  if (childXs.length === 0) {
-    return input.positions
-  }
-
-  const dx = parentPos.x - medianX(childXs)
-  if (Math.abs(dx) < 0.000001) {
-    return input.positions
-  }
-
-  return node.children.reduce(
-    (nextPositions, childId) => shiftSubtree({ nodeId: childId, dx, dy: 0, tree: input.tree, positions: nextPositions }),
-    input.positions
-  )
+  return input.positions
 }
 
- 
 const compactBranches = (input: CompactBranchesInput): ReadonlyMap<string, LayoutPoint> => {
   const node = input.tree.nodes.get(input.nodeId)
-  if (node === undefined) {
-    return input.positions
-  }
+  const nodeOption = fromNullable(node)
+  if (!isNone(nodeOption)) {
+    // Post-order: compact children's subtrees first so their spans are already
+    // minimal before we measure them at this level.
+    const compactedChildren = nodeOption.value.children.reduce(
+      (nextPositions, childId) => compactBranches({
+        nodeId: childId,
+        tree: input.tree,
+        positions: nextPositions,
+        subtreeHasHanging: input.subtreeHasHanging
+      }),
+      input.positions
+    )
 
-  // Post-order: compact children's subtrees first so their spans are already
-  // minimal before we measure them at this level.
-  const compactedChildren = node.children.reduce(
-    (nextPositions, childId) => compactBranches({
-      nodeId: childId,
+    const compactedSiblings = compactChildrenForNode({
+      nodeId: input.nodeId,
       tree: input.tree,
-      positions: nextPositions,
+      positions: compactedChildren,
       subtreeHasHanging: input.subtreeHasHanging
-    }),
-    input.positions
-  )
-
-  const compactedSiblings = compactChildrenForNode({
-    nodeId: input.nodeId,
-    tree: input.tree,
-    positions: compactedChildren,
-    subtreeHasHanging: input.subtreeHasHanging
-  })
-  return centerChildGroupUnderParent({
-    nodeId: input.nodeId,
-    tree: input.tree,
-    positions: compactedSiblings,
-    subtreeHasHanging: input.subtreeHasHanging
-  })
+    })
+    return centerChildGroupUnderParent({
+      nodeId: input.nodeId,
+      tree: input.tree,
+      positions: compactedSiblings,
+      subtreeHasHanging: input.subtreeHasHanging
+    })
+  }
+  return input.positions
 }
 
 /**

@@ -8,6 +8,7 @@
 
 import type { DeptId, NodeId } from '../types/branded'
 import type { OrgNode, OrgTree } from '../types/org-tree'
+import { fromNullable, intoMap, isNone } from '@tsfpp/prelude'
 import type { IndexedNode, IndexedTree, LayoutNodeKind } from './types'
 
 /** Extracts the raw string id from a branded NodeId or DeptId. */
@@ -69,9 +70,7 @@ type IndexedNodeWithTriangle = IndexedNode & {
   readonly triangleEffect?: { readonly color: string }
 }
 
-// DEVIATION(1.9): Immutable map construction is required to return fresh map values without mutating existing state.
-// eslint-disable-next-line no-restricted-syntax
-const mapFromEntries = <K, V>(entries: ReadonlyArray<readonly [K, V]>): ReadonlyMap<K, V> => new Map(entries)
+const mapFromEntries = <K, V>(entries: ReadonlyArray<readonly [K, V]>): ReadonlyMap<K, V> => intoMap(entries)
 
 const emptyWalkResult = (): WalkResult => ({
   nodes: mapFromEntries<string, IndexedNode>([]),
@@ -91,10 +90,15 @@ const mergeWalkResults = (left: WalkResult, right: WalkResult): WalkResult => ({
 
 const optionalLayoutHints = (
   node: OptionalLayoutHints
-): Partial<Pick<IndexedNode, 'layoutHint' | 'hangingSide'>> => ({
-  ...(node.layoutHint !== undefined ? { layoutHint: node.layoutHint } : {}),
-  ...(node.hangingSide !== undefined ? { hangingSide: node.hangingSide } : {})
-})
+): Partial<Pick<IndexedNode, 'layoutHint' | 'hangingSide'>> => {
+  const layoutHintOption = fromNullable(node.layoutHint)
+  const hangingSideOption = fromNullable(node.hangingSide)
+
+  return {
+    ...(!isNone(layoutHintOption) ? { layoutHint: layoutHintOption.value } : {}),
+    ...(!isNone(hangingSideOption) ? { hangingSide: hangingSideOption.value } : {})
+  }
+}
 
 const childIds = (children: readonly OrgNode[]): readonly string[] => children.map((child) => toId(child.id))
 
@@ -127,12 +131,13 @@ const createIndexedNodeBase = (
   }
 ): IndexedNodeWithTriangle => {
   const triangleEffect = getTriangleEffect(node)
+  const triangleOption = fromNullable(triangleEffect)
   return {
     id: params.id,
     kind: params.kind,
     label: params.label,
     ...optionalLayoutHints(node),
-    ...(triangleEffect !== undefined ? { triangleEffect } : {}),
+    ...(!isNone(triangleOption) ? { triangleEffect: triangleOption.value } : {}),
     depth: params.depth,
     parentId: params.parentId,
     childIndex: params.childIndex,

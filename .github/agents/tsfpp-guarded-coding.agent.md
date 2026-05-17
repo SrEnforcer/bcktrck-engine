@@ -12,6 +12,10 @@ tools:
   - todo
   - vscode/askQuestions
 handoffs:
+  - label: Write tests first
+    agent: tsfpp-tdd
+    prompt: "Write the failing test suite for this feature before any implementation."
+    send: false
   - label: Audit what I just wrote
     agent: tsfpp-audit
     prompt: "Audit the files just modified for TSF++ compliance. Focus: all."
@@ -40,11 +44,37 @@ If either file is missing or unreadable, stop immediately and report the missing
 
 ## Session start
 
-If the user has not specified a layer, ask exactly this before doing anything else:
+Infer the layer per task from the user's message:
 
-> Which layer are you working in? `core` · `api` · `dal` · `react` · `cli`
+| Signal | Layer |
+|--------|-------|
+| "web frontend", "UI", "component", "page", "form", "editor", "button" | `react` |
+| "API", "endpoint", "handler", "route", "response" | `api` |
+| "database", "repository", "query", "migration", "schema" | `dal` |
+| "CLI", "command", "argv", "script", "terminal" | `cli` |
+| "domain", "model", "type", "rule" — no framework context | `core` |
 
-Do not proceed until a layer is confirmed.
+If the request covers a single layer, state it and proceed:
+> "Layer: `react` — proceeding."
+
+If the request spans multiple layers, state the full plan before proceeding:
+> "Layer plan: `react` (editor save shortcut) · `api` (POST /export endpoint) — proceeding in that order."
+
+Apply the correct layer constraints per task as work proceeds.
+Never mix layer constraints within a single file.
+
+If and only if the layer cannot be inferred for any task, ask once:
+> Which layer applies to [the unclear task]? `core` · `api` · `dal` · `react` · `cli`
+
+### TDD gate
+
+Before writing any production code, verify that failing tests exist for the work being requested.
+
+Check for a corresponding test file alongside the target file(s). If no test file exists or no tests cover the requested behaviour:
+
+> "No failing tests found for this work. Use the **Write tests first** handoff to run `tsfpp-tdd` before proceeding here."
+
+Do not write production code until failing tests exist. The only exception is modifying existing passing tests to reflect a behaviour change — in that case, state the exception explicitly.
 
 ---
 
@@ -80,6 +110,29 @@ Implement user requests with minimal safe diffs while preserving TSF++ guarantee
 `class` · `this` · `new` · `instanceof` · `namespace` · `enum` · `let` · `var` · `for` · `while` · `do..while` · `.push` · `.pop` · `.splice` · `.sort` · `.reverse` · `delete` · optional params `?` (use `Option<T>`)
 
 **Size limits:** body ≤ 40 lines · cyclomatic complexity ≤ 10 · nesting ≤ 4. Decompose before submitting if exceeded.
+
+---
+
+## Prelude-first
+
+Before writing any implementation, check `@tsfpp/prelude` for available symbols.
+Do not hand-roll what the prelude already provides.
+
+| If you need… | Reach for… |
+|---|---|
+| Nullable value that may be absent | `Option<T>` — `some`, `none`, `fromNullable` |
+| Fallible operation | `Result<T, E>` — `ok`, `err`, `tryCatch`, `tryCatchAsync` |
+| No-value success | `Result<Unit, E>` — `ok(unit)` |
+| Pipeline | `pipe` / `flow` |
+| Side effect in chain | `tap` / `tapErr` |
+| Fallible map over array | `traverseArray` |
+| Unknown record decoding | `isRecord`, `getStringField`, `getNumberField`, `getTypedField` |
+| Key/value lookup | `intoMap`, `lookup`, `assoc`, `dissoc` |
+| Set membership | `intoSet`, `conj`, `disj`, `member` |
+| Exhaustive match | `absurd` |
+
+If you are about to write a `try/catch`, a `null` check, an `if (x === undefined)`,
+a `x ?? fallback`, or a `.map()` that can fail — stop and use the prelude equivalent instead.
 
 ---
 
@@ -130,7 +183,8 @@ Restate the requested behaviour in one sentence. If ambiguous, ask one focused q
 Define or adjust ADTs and branded/refined types. Add smart constructors (`mk*`, `from*`) that validate and return `Result` or `Option`.
 
 **Step 3 — Tests first**
-Add or update tests before implementation. Cover success, failure, and edge cases. Use fast-check for pure functions.
+Confirm failing tests exist (via the TDD gate above). If updating existing behaviour, update the tests first so they fail, then implement.
+Do not add new tests for new behaviour here — that is `tsfpp-tdd`'s job.
 
 **Step 4 — Implement**
 Keep changes local and compositional. Do not refactor unrelated code.

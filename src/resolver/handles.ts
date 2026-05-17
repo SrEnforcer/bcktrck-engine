@@ -1,4 +1,12 @@
 /**
+ * @module resolver/handles
+ *
+ * Build stable handle maps and duplicate-handle diagnostics for AST nodes.
+ *
+ * @packageDocumentation
+ */
+
+/**
  * Handle map builder: assigns unique identifiers (handles) to all nodes in an AST.
  *
  * Explicit handles from source (@my-node) are used as-is if unique.
@@ -7,7 +15,7 @@
  */
 
 import type { AstNode } from '../types/ast'
-import { assoc, conj, intoMap, intoSet } from '@tsfpp/prelude'
+import { assoc, conj, fromNullable, getOrElse, intoMap, intoSet, isNone } from '@tsfpp/prelude'
 import { collectNodes } from './tree'
 
 /**
@@ -61,8 +69,9 @@ type HandleMapAcc = {
 }
 
 const assignHandle = (acc: HandleMapAcc, node: AstNode): HandleMapAcc => {
-  const explicitHandle = node.handle
-  if (explicitHandle !== undefined) {
+  const explicitHandleOption = fromNullable(node.handle)
+  if (!isNone(explicitHandleOption)) {
+    const explicitHandle = explicitHandleOption.value
     if (acc.used.has(explicitHandle)) {
       return {
         ...acc,
@@ -78,7 +87,7 @@ const assignHandle = (acc: HandleMapAcc, node: AstNode): HandleMapAcc => {
     }
   }
 
-  const base = slugify(node.displayName ?? 'node')
+  const base = slugify(getOrElse<string>(() => 'node')(fromNullable(node.displayName)))
   const autoHandle = uniqueAutoHandle(base, acc.used)
   return {
     used: conj(autoHandle)(acc.used),

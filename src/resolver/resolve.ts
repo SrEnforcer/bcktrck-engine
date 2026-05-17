@@ -1,4 +1,12 @@
 /**
+ * @module resolver/resolve
+ *
+ * Resolve validated AST structures into immutable organizational tree artifacts.
+ *
+ * @packageDocumentation
+ */
+
+/**
  * Semantic resolver: transforms an Abstract Syntax Tree into a resolved organizational tree.
  *
  * Validates:
@@ -14,7 +22,7 @@
 // DEVIATION(2.4): Resolver remains centralized during staged extraction of icon, shadow, and edge adapters.
 
 import { asDeptId, asNodeId } from '../types/branded'
-import { intoMap } from '@tsfpp/prelude'
+import { fromNullable, getOrElse, intoMap, isNone } from '@tsfpp/prelude'
 import type { AstNode, AstOrg } from '../types/ast'
 import type { DottedEdge, OrgNode, OrgTree } from '../types/org-tree'
 import type { ResolveResult } from '../types/results'
@@ -56,22 +64,25 @@ const stripMatchingQuotes = (value: string): string => {
 }
 
 const resolveStringVariable = (value: string | undefined, variables: ResolverVariables): string | undefined => {
-  if (value === undefined) {
+  const valueOption = fromNullable(value)
+  if (isNone(valueOption)) {
     return undefined
   }
+  const safeValue = valueOption.value
 
-  const trimmed = value.trim()
+  const trimmed = safeValue.trim()
   if (!trimmed.startsWith('$')) {
-    return value
+    return safeValue
   }
 
   const variableName = trimmed.slice(1)
   const resolved = variables.get(variableName)
-  if (resolved === undefined) {
-    return value
+  const resolvedOption = fromNullable(resolved)
+  if (isNone(resolvedOption)) {
+    return safeValue
   }
 
-  return stripMatchingQuotes(resolved.trim())
+  return stripMatchingQuotes(resolvedOption.value.trim())
 }
 
 const findResolvedStringAttrValue = (key: string, attrs: readonly AstNode['attrs'][number][], variables: ResolverVariables): string | undefined =>
@@ -104,7 +115,7 @@ const extractHangingSide = (node: AstNode): 'left' | 'right' | undefined => {
  * Resolve node to its assigned handle, defaulting to 'node' if not found.
  */
 const getNodeIdForAstNode = (astNode: AstNode, nodeToHandle: ReadonlyMap<AstNode, string>): string =>
-  nodeToHandle.get(astNode) ?? 'node'
+  getOrElse<string>(() => 'node')(fromNullable(nodeToHandle.get(astNode)))
 
 const firstLayoutHint = (node: AstNode): AstNode['layoutHints'][number]['kind'] | undefined =>
   node.layoutHints[0]?.kind
@@ -117,8 +128,11 @@ const toHrTitle = (node: AstNode, variables: ResolverVariables): string => {
   const displayName = node.displayName?.trim()
   const title = findResolvedStringAttrValue('title', node.attrs, variables)?.trim()
 
-  if (title === undefined) return displayName ?? ''
-  return displayName !== undefined && displayName.length > 0 ? `${displayName}\n${title}` : title
+  const titleOption = fromNullable(title)
+  if (isNone(titleOption)) return getOrElse<string>(() => '')(fromNullable(displayName))
+  return !isNone(fromNullable(displayName)) && getOrElse<string>(() => '')(fromNullable(displayName)).length > 0
+    ? `${getOrElse<string>(() => '')(fromNullable(displayName))}\n${titleOption.value}`
+    : titleOption.value
 }
 
 /**
@@ -133,7 +147,7 @@ const extractShadowPrimaryHandle = (node: AstNode, variables: ResolverVariables)
  * Extract shadow node label from [label: ...] attribute, falling back to display name.
  */
 const extractShadowLabel = (node: AstNode, variables: ResolverVariables): string | undefined =>
-  findResolvedStringAttrValue('label', node.attrs, variables) ?? node.displayName
+  getOrElse<string | undefined>(() => node.displayName)(fromNullable(findResolvedStringAttrValue('label', node.attrs, variables)))
 
 const extractShadowType = (node: AstNode): 'employee' | 'staff' => {
   const value = findStringAttrValue('type', node.attrs)?.trim().toLowerCase()
@@ -143,6 +157,20 @@ const extractShadowType = (node: AstNode): 'employee' | 'staff' => {
 const extractShadowSide = (node: AstNode): 'left' | 'right' | undefined => {
   const value = findStringAttrValue('side', node.attrs)?.trim().toLowerCase()
   return value === 'left' || value === 'right' ? value : undefined
+}
+
+const resolveIconPos = (rawPos: string | undefined): IconPos => {
+  switch (rawPos) {
+    case undefined:
+      return DEFAULT_ICON_POS
+    case 'upper-left':
+    case 'upper-right':
+    case 'bottom-left':
+    case 'bottom-right':
+      return rawPos
+    default:
+      return DEFAULT_ICON_POS
+  }
 }
 
 /**
@@ -159,25 +187,38 @@ const extractIconAttrs = (
 ): { readonly icon?: string; readonly iconPos?: IconPos; readonly iconSize?: number; readonly iconOpacity?: number } => {
   const explicitIcon = findResolvedStringAttrValue('icon', node.attrs, variables)?.trim()
   const titleAttrRaw = findStringAttrValue('title', node.attrs)
-  const titleIcon = titleAttrRaw !== undefined && titleAttrRaw.startsWith('$')
-    ? variableIconMap.get(titleAttrRaw.slice(1))
+  const titleAttrRawOption = fromNullable(titleAttrRaw)
+  const titleIcon = !isNone(titleAttrRawOption) && titleAttrRawOption.value.startsWith('$')
+    ? variableIconMap.get(titleAttrRawOption.value.slice(1))
     : undefined
-  const iconName = explicitIcon ?? titleIcon
+  const iconName = getOrElse<string | undefined>(() => titleIcon)(fromNullable(explicitIcon))
+  const iconNameOption = fromNullable(iconName)
 
-  if (iconName === undefined || !isKnownIcon(iconName)) return {}
+  if (isNone(iconNameOption) || !isKnownIcon(iconNameOption.value)) return {}
 
   const rawPos = findResolvedStringAttrValue('icon-pos', node.attrs, variables)?.trim()
-  // DEVIATION(1.6): Safe cast is constrained by ICON_POSITIONS runtime membership guard.
-  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- membership in ICON_POSITIONS guarantees rawPos is a valid IconPos literal.
-  const iconPos: IconPos = rawPos !== undefined && ICON_POSITIONS.has(rawPos) ? (rawPos as IconPos) : DEFAULT_ICON_POS
+  const rawPosOption = fromNullable(rawPos)
+  const iconPos: IconPos = isNone(rawPosOption) || !ICON_POSITIONS.has(rawPosOption.value)
+    ? DEFAULT_ICON_POS
+    : resolveIconPos(rawPosOption.value)
 
   const rawSize = findNumberAttrValue('icon-size', node.attrs)
-  const iconSize = rawSize !== undefined && rawSize > 0 ? Math.round(rawSize) : DEFAULT_ICON_SIZE
+  const rawSizeOption = fromNullable(rawSize)
+  const iconSize = !isNone(rawSizeOption) && rawSizeOption.value > 0 ? Math.round(rawSizeOption.value) : DEFAULT_ICON_SIZE
 
   const rawOpacity = findNumberAttrValue('icon-opacity', node.attrs)
-  const iconOpacity = rawOpacity !== undefined && rawOpacity >= 0 && rawOpacity <= 1 ? rawOpacity : undefined
+  const rawOpacityOption = fromNullable(rawOpacity)
+  const iconOpacity = !isNone(rawOpacityOption) && rawOpacityOption.value >= 0 && rawOpacityOption.value <= 1
+    ? rawOpacityOption.value
+    : undefined
 
-  return { icon: iconName, iconPos, iconSize, ...(iconOpacity !== undefined ? { iconOpacity } : {}) }
+  const iconOpacityOption = fromNullable(iconOpacity)
+  return {
+    icon: iconNameOption.value,
+    iconPos,
+    iconSize,
+    ...(isNone(iconOpacityOption) ? {} : { iconOpacity: iconOpacityOption.value })
+  }
 }
 /* eslint-enable complexity */
 
@@ -190,10 +231,12 @@ const extractIconAttrs = (
 // Helper: extract optional triangle effect from the !new visual hint.
 const extractTriangleEffect = (node: AstNode): { readonly color: string } | undefined => {
   const hint = node.visualHints?.find(h => h.name === 'new')
-  if (hint === undefined) return undefined
-  const rawColor = hint.params?.[0]
-  const color = rawColor !== undefined && /^#([0-9a-fA-F]{3,8})$/.test(rawColor.trim())
-    ? rawColor.trim()
+  const hintOption = fromNullable(hint)
+  if (isNone(hintOption)) return undefined
+  const rawColor = hintOption.value.params?.[0]
+  const rawColorOption = fromNullable(rawColor)
+  const color = !isNone(rawColorOption) && /^#([0-9a-fA-F]{3,8})$/.test(rawColorOption.value.trim())
+    ? rawColorOption.value.trim()
     : '#e53935'
   return { color }
 }
@@ -225,24 +268,32 @@ const toOrgNode = (input: ToOrgNodeInput): OrgNode => {
   if (kind === 'department') {
     const headHandle = extractDeptHeadHandle(input.node, input.variables)
     const fallbackHeadAst = input.node.children.find((child) => child.kind !== 'dept')
-    const fallbackHeadId = fallbackHeadAst !== undefined
-      ? asNodeId(getNodeIdForAstNode(fallbackHeadAst, input.nodeToHandle))
+    const fallbackHeadAstOption = fromNullable(fallbackHeadAst)
+    const fallbackHeadId = !isNone(fallbackHeadAstOption)
+      ? asNodeId(getNodeIdForAstNode(fallbackHeadAstOption.value, input.nodeToHandle))
       : asNodeId(`missing-head-${idValue}`)
+    const layoutHintOption = fromNullable(layoutHint)
+    const hangingSideOption = fromNullable(hangingSide)
+    const triangleEffectOption = fromNullable(triangleEffect)
+    const headHandleOption = fromNullable(headHandle)
 
     return {
       kind: 'department',
       id: asDeptId(idValue),
-      name: input.node.displayName ?? idValue,
-      ...(layoutHint !== undefined ? { layoutHint } : {}),
-      ...(hangingSide !== undefined ? { hangingSide } : {}),
-      ...(triangleEffect !== undefined ? { triangleEffect } : {}),
-      head: headHandle !== undefined ? asNodeId(headHandle) : fallbackHeadId,
+      name: getOrElse<string>(() => idValue)(fromNullable(input.node.displayName)),
+      ...(isNone(layoutHintOption) ? {} : { layoutHint: layoutHintOption.value }),
+      ...(isNone(hangingSideOption) ? {} : { hangingSide: hangingSideOption.value }),
+      ...(isNone(triangleEffectOption) ? {} : { triangleEffect: triangleEffectOption.value }),
+      head: isNone(headHandleOption) ? fallbackHeadId : asNodeId(headHandleOption.value),
       members: children
     }
   }
 
   if (kind === 'vacancy') {
     const vacancyIconAttrs = extractIconAttrs(input.node, input.variables, input.variableIconMap)
+    const triangleEffectOption = fromNullable(triangleEffect)
+    const layoutHintOption = fromNullable(layoutHint)
+    const hangingSideOption = fromNullable(hangingSide)
     return {
       kind: 'vacancy',
       id: asNodeId(idValue),
@@ -250,14 +301,17 @@ const toOrgNode = (input: ToOrgNodeInput): OrgNode => {
         title: toHrTitle(input.node, input.variables),
         ...vacancyIconAttrs
       },
-      ...(triangleEffect !== undefined ? { triangleEffect } : {}),
-      ...(layoutHint !== undefined ? { layoutHint } : {}),
-      ...(hangingSide !== undefined ? { hangingSide } : {}),
+      ...(isNone(triangleEffectOption) ? {} : { triangleEffect: triangleEffectOption.value }),
+      ...(isNone(layoutHintOption) ? {} : { layoutHint: layoutHintOption.value }),
+      ...(isNone(hangingSideOption) ? {} : { hangingSide: hangingSideOption.value }),
       children
     }
   }
 
   const empIconAttrs = extractIconAttrs(input.node, input.variables, input.variableIconMap)
+  const triangleEffectOption = fromNullable(triangleEffect)
+  const layoutHintOption = fromNullable(layoutHint)
+  const hangingSideOption = fromNullable(hangingSide)
   return {
     kind: 'employee',
     id: asNodeId(idValue),
@@ -265,9 +319,9 @@ const toOrgNode = (input: ToOrgNodeInput): OrgNode => {
       title: toHrTitle(input.node, input.variables),
       ...empIconAttrs
     },
-    ...(triangleEffect !== undefined ? { triangleEffect } : {}),
-    ...(layoutHint !== undefined ? { layoutHint } : {}),
-    ...(hangingSide !== undefined ? { hangingSide } : {}),
+    ...(isNone(triangleEffectOption) ? {} : { triangleEffect: triangleEffectOption.value }),
+    ...(isNone(layoutHintOption) ? {} : { layoutHint: layoutHintOption.value }),
+    ...(isNone(hangingSideOption) ? {} : { hangingSide: hangingSideOption.value }),
     children,
     staff
   }
@@ -287,31 +341,51 @@ type ShadowNodeOptionalsInput = {
   readonly hideConnector: boolean | undefined
 }
 
+const optionalShadowLabel = (label: string | undefined): { readonly label?: string } => {
+  const labelOption = fromNullable(label)
+  return isNone(labelOption) ? {} : { label: labelOption.value }
+}
+
+const optionalShadowSide = (side: 'left' | 'right' | undefined): { readonly side?: 'left' | 'right' } => {
+  const sideOption = fromNullable(side)
+  return isNone(sideOption) ? {} : { side: sideOption.value }
+}
+
+const optionalShadowHost = (
+  host: ReturnType<typeof asNodeId> | undefined
+): { readonly host?: ReturnType<typeof asNodeId> } => {
+  const hostOption = fromNullable(host)
+  return isNone(hostOption) ? {} : { host: hostOption.value }
+}
+
 const shadowNodeOptionals = (input: ShadowNodeOptionalsInput): Partial<OrgTree['shadowNodes'][number]> => ({
-  ...(input.label !== undefined ? { label: input.label } : {}),
+  ...optionalShadowLabel(input.label),
   ...(input.type !== 'employee' ? { type: input.type } : {}),
-  ...(input.side !== undefined ? { side: input.side } : {}),
-  ...(input.host !== undefined ? { host: input.host } : {}),
+  ...optionalShadowSide(input.side),
+  ...optionalShadowHost(input.host),
   ...(input.hideConnector === true ? { hideConnector: true } : {})
 })
 
 const buildShadowNodeFromEntry = (input: ShadowNodeFromEntryInput): OrgTree['shadowNodes'] => {
   const primaryHandle = extractShadowPrimaryHandle(input.entry.node, input.variables)
-  if (primaryHandle === undefined) {
+  const primaryHandleOption = fromNullable(primaryHandle)
+  if (isNone(primaryHandleOption)) {
     return []
   }
 
   const id = asNodeId(getNodeIdForAstNode(input.entry.node, input.nodeToHandle))
-  const primary = asNodeId(primaryHandle)
+  const primary = asNodeId(primaryHandleOption.value)
   const label = extractShadowLabel(input.entry.node, input.variables)
   const type = extractShadowType(input.entry.node)
   const side = extractShadowSide(input.entry.node)
-  const host = type === 'staff' && input.entry.parentHandle !== undefined
-    ? asNodeId(input.entry.parentHandle)
+  const parentHandleOption = fromNullable(input.entry.parentHandle)
+  const host = type === 'staff' && !isNone(parentHandleOption)
+    ? asNodeId(parentHandleOption.value)
     : undefined
 
   const styleValue = findStringAttrValue('style', input.entry.node.attrs)?.trim().toLowerCase()
-  const hideConnector = styleValue !== undefined && isSuppressedStyle(styleValue) ? true : undefined
+  const styleValueOption = fromNullable(styleValue)
+  const hideConnector = !isNone(styleValueOption) && isSuppressedStyle(styleValueOption.value) ? true : undefined
 
   return [
     {
@@ -328,17 +402,20 @@ const buildShadowNodeFromEntry = (input: ShadowNodeFromEntryInput): OrgTree['sha
 const buildDottedEdges = (ast: AstOrg, variables: ResolverVariables): readonly DottedEdge[] =>
   ast.links.flatMap((link) => {
     const styleValue = findStringAttrValue('style', link.attrs)?.trim().toLowerCase()
-    if (styleValue !== undefined && isSuppressedStyle(styleValue)) {
+    const styleValueOption = fromNullable(styleValue)
+    if (!isNone(styleValueOption) && isSuppressedStyle(styleValueOption.value)) {
       return []
     }
 
     const label = resolveStringVariable(findStringAttrValue('label', link.attrs), variables)
+    const labelOption = fromNullable(label)
     const kind = findStringAttrValue('kind', link.attrs)?.trim().toLowerCase()
+    const kindOption = fromNullable(kind)
     return [{
       from: asNodeId(link.from),
       to: asNodeId(link.to),
-      ...(label !== undefined ? { label } : {}),
-      ...(kind !== undefined ? { kind } : {})
+      ...(isNone(labelOption) ? {} : { label: labelOption.value }),
+      ...(isNone(kindOption) ? {} : { kind: kindOption.value })
     }]
   })
 
@@ -357,7 +434,7 @@ const buildShadowNodes = (
     parentHandle: string | undefined
   ): readonly ShadowAstEntry[] => {
     const self = node.kind === 'shadow' ? [{ node, parentHandle }] : []
-    const currentHandle = nodeToHandle.get(node) ?? node.handle
+    const currentHandle = getOrElse<string | undefined>(() => node.handle)(fromNullable(nodeToHandle.get(node)))
     const childEntries = node.children.flatMap((child) => collectShadowEntries(child, currentHandle))
     const staffEntries = node.staffNodes.flatMap((staffNode) => collectShadowEntries(staffNode, currentHandle))
     return [...self, ...childEntries, ...staffEntries]

@@ -16,7 +16,7 @@
  */
 
 import type { Option } from '@tsfpp/prelude'
-import { entriesOfMap, intoMap, intoSet, none, some } from '@tsfpp/prelude'
+import { entriesOfMap, fromNullable, getOrElse, intoMap, intoSet, isNone, none, some } from '@tsfpp/prelude'
 import { asNodeId } from './types/branded'
 import type { OrgNode, OrgTree } from './types/org-tree'
 
@@ -61,8 +61,10 @@ const composeShadowLabel = (primaryLabel: string, shadowLabelOverride: string | 
     .filter((segment) => segment.length > 0)
   const [name = primaryLabel, ...rest] = parts
   const title = rest.length > 0 ? rest.join(' ') : undefined
-  const effectiveTitle = shadowLabelOverride ?? title
-  return effectiveTitle !== undefined ? `${name}\n${effectiveTitle}` : name
+  const overrideOption = fromNullable(shadowLabelOverride)
+  const fallbackOption = fromNullable(title)
+  const effectiveTitleOption = isNone(overrideOption) ? fallbackOption : overrideOption
+  return isNone(effectiveTitleOption) ? name : `${name}\n${effectiveTitleOption.value}`
 }
 
 const childrenOf = (node: OrgNode): readonly OrgNode[] =>
@@ -75,9 +77,10 @@ const collectParentMap = (
   parentId: string | undefined = undefined
 ): ReadonlyMap<string, string> => {
   const ownId = rawId(node.id)
-  const withCurrent = parentId === undefined
+  const parentIdOption = fromNullable(parentId)
+  const withCurrent = isNone(parentIdOption)
     ? intoMap<string, string>([])
-    : intoMap<string, string>([[ownId, parentId]])
+    : intoMap<string, string>([[ownId, parentIdOption.value]])
 
   return childrenOf(node).reduce<ReadonlyMap<string, string>>((acc, child) => {
     const childMap = collectParentMap(child, ownId)
@@ -86,10 +89,10 @@ const collectParentMap = (
 }
 
 const isAncestor = (ancestorId: string, nodeId: string, parentMap: ReadonlyMap<string, string>): boolean => {
-  const parent = parentMap.get(nodeId)
-  if (parent === undefined) return false
-  if (parent === ancestorId) return true
-  return isAncestor(ancestorId, parent, parentMap)
+  const parentOption = fromNullable(parentMap.get(nodeId))
+  if (isNone(parentOption)) return false
+  if (parentOption.value === ancestorId) return true
+  return isAncestor(ancestorId, parentOption.value, parentMap)
 }
 
 const uniqueInOrder = (values: readonly string[]): readonly string[] =>
@@ -106,28 +109,36 @@ const filterShadowNodes = (tree: OrgTree, ids: ReadonlySet<string>): OrgTree['sh
         return s
       }
 
-      const primaryNode = findNodeById(tree.root, rawId(s.primary))
-      if (primaryNode === undefined) {
+      const primaryNodeOption = fromNullable(findNodeById(tree.root, rawId(s.primary)))
+      if (isNone(primaryNodeOption)) {
         return s
       }
 
       return {
         ...s,
-        label: composeShadowLabel(nodeRenderLabel(primaryNode), s.label)
+        label: composeShadowLabel(nodeRenderLabel(primaryNodeOption.value), s.label)
       }
     })
 
 // DEVIATION(4.4): Forest-root synthesis remains as one helper to keep root-kind branching and fallback semantics in one total function.
 // eslint-disable-next-line max-lines-per-function -- forest root synthesis preserves existing root semantics across all root kinds in one total helper.
 const buildForestRoot = (tree: OrgTree, selectedRoots: readonly OrgNode[]): OrgNode => {
-  const firstNonDepartmentNodeId = (nodes: readonly OrgNode[]): string | undefined =>
-    nodes.reduce<string | undefined>((found, node) => {
-      if (found !== undefined) return found
-      if (node.kind !== 'department') {
-        return rawId(node.id)
-      }
-      return firstNonDepartmentNodeId(node.members)
-    }, undefined)
+  const firstNonDepartmentNodeId = (nodes: readonly OrgNode[]): string | undefined => {
+    const headOption = fromNullable(nodes[0])
+    if (isNone(headOption)) {
+      return undefined
+    }
+
+    const head = headOption.value
+    if (head.kind !== 'department') {
+      return rawId(head.id)
+    }
+
+    const descendantOption = fromNullable(firstNonDepartmentNodeId(head.members))
+    return isNone(descendantOption)
+      ? firstNonDepartmentNodeId(nodes.slice(1))
+      : descendantOption.value
+  }
 
   const syntheticRoot = (): OrgNode => ({
     kind: 'employee',
@@ -139,18 +150,18 @@ const buildForestRoot = (tree: OrgTree, selectedRoots: readonly OrgNode[]): OrgN
     staff: []
   })
 
-  if (selectedRoots.length === 1 && selectedRoots[0] !== undefined) {
-    return selectedRoots[0]
+  if (selectedRoots.length === 1) {
+    return getOrElse<OrgNode>(() => syntheticRoot())(fromNullable(selectedRoots[0]))
   }
 
   if (tree.root.kind === 'department') {
-    const fallbackHead = firstNonDepartmentNodeId(selectedRoots)
-    if (fallbackHead === undefined) {
+    const fallbackHeadOption = fromNullable(firstNonDepartmentNodeId(selectedRoots))
+    if (isNone(fallbackHeadOption)) {
       return syntheticRoot()
     }
     return {
       ...tree.root,
-      head: asNodeId(fallbackHead),
+      head: asNodeId(fallbackHeadOption.value),
       members: selectedRoots
     }
   }
@@ -195,7 +206,18 @@ const collectNodeIds = (node: OrgNode): ReadonlySet<string> => {
 const findNodeById = (root: OrgNode, id: string): OrgNode | undefined => {
   if (rawId(root.id) === id) return root
   const children = root.kind === 'department' ? root.members : root.children
-  return children.reduce<OrgNode | undefined>((found, child) => found ?? findNodeById(child, id), undefined)
+
+  const findInChildren = (remaining: readonly OrgNode[]): OrgNode | undefined => {
+    const nextOption = fromNullable(remaining[0])
+    if (isNone(nextOption)) {
+      return undefined
+    }
+
+    const foundOption = fromNullable(findNodeById(nextOption.value, id))
+    return isNone(foundOption) ? findInChildren(remaining.slice(1)) : foundOption.value
+  }
+
+  return findInChildren(children)
 }
 
 const collectEntries = (node: OrgNode, depth: number): readonly SubtreeEntry[] => {
@@ -239,8 +261,9 @@ export const listSubtrees = (tree: OrgTree): readonly SubtreeEntry[] =>
  * @returns The isolated subtree as `Option<OrgTree>` — `none` when `id` is not found.
  */
 export const isolateSubtree = (tree: OrgTree, id: string): Option<OrgTree> => {
-  const node = findNodeById(tree.root, id)
-  if (node === undefined) return none
+  const nodeOption = fromNullable(findNodeById(tree.root, id))
+  if (isNone(nodeOption)) return none
+  const node = nodeOption.value
 
   const ids = collectNodeIds(node)
   const shadowNodes = filterShadowNodes(tree, ids)
@@ -263,10 +286,13 @@ export const isolateSubtree = (tree: OrgTree, id: string): Option<OrgTree> => {
  * @returns A merged subtree tree when at least one id resolves, otherwise `none`.
  */
 export const isolateSubtrees = (tree: OrgTree, ids: readonly string[]): Option<OrgTree> => {
+  const isSomeNode = (node: OrgNode | undefined): node is OrgNode =>
+    !isNone(fromNullable(node))
+
   const uniqueIds = uniqueInOrder(ids)
   const validRoots = uniqueIds
     .map((id) => findNodeById(tree.root, id))
-    .filter((node): node is OrgNode => node !== undefined)
+    .filter(isSomeNode)
 
   if (validRoots.length === 0) {
     return none
@@ -280,7 +306,7 @@ export const isolateSubtrees = (tree: OrgTree, ids: readonly string[]): Option<O
 
   const selectedRoots = validRootIds
     .map((id) => findNodeById(tree.root, id))
-    .filter((node): node is OrgNode => node !== undefined)
+    .filter(isSomeNode)
 
   const includedIds = intoSet(
     selectedRoots.flatMap((node) => [...collectNodeIds(node)])

@@ -1,4 +1,5 @@
 import type { DottedEdge } from '../../types/org-tree'
+import { fromNullable, getOrElse, isNone, pipe } from '@tsfpp/prelude'
 import type { PlacedTree, PlacedStaff, RenderConfig } from '../types'
 import { emptyRenderBounds, escapeXml, expandBoundsWithPoints, getNodeBounds, type NodeBounds, type RenderBounds, type SvgPoint } from './shared'
 
@@ -80,9 +81,15 @@ type RenderDottedEdgesInput = {
   readonly shadowBoundsMap: ReadonlyMap<string, NodeBounds>
 }
 
+const numberOrDefault = (value: number | undefined, fallback: number): number =>
+  pipe(
+    fromNullable(value),
+    getOrElse(() => fallback)
+  )
+
 const incrementCount = (counts: DottedEdgeCounts, key: string): DottedEdgeCounts => ({
   ...counts,
-  [key]: (counts[key] ?? 0) + 1
+  [key]: numberOrDefault(counts[key], 0) + 1
 })
 
 const buildDottedEdgeTotals = (dottedEdges: readonly DottedEdge[]): {
@@ -113,8 +120,14 @@ const getLabelAnchorForPolyline = (points: readonly SvgPoint[]): SvgPoint => {
     }
   }
 
-  const first = points[0] ?? { x: 0, y: 0 }
-  const last = points[points.length - 1] ?? first
+  const first = pipe(
+    fromNullable(points[0]),
+    getOrElse(() => ({ x: 0, y: 0 }))
+  )
+  const last = pipe(
+    fromNullable(points[points.length - 1]),
+    getOrElse(() => first)
+  )
   return {
     x: (first.x + last.x) / 2,
     y: (first.y + last.y) / 2
@@ -150,9 +163,9 @@ const renderDottedEdgeElements = (input: RenderDottedEdgeElementsInput): DottedR
       : [])
   ]
 
-  const start = input.points[0]
-  const end = input.points[input.points.length - 1]
-  if (start === undefined || end === undefined) {
+  const start = fromNullable(input.points[0])
+  const end = fromNullable(input.points[input.points.length - 1])
+  if (isNone(start) || isNone(end)) {
     return bumpDottedSeen({
       ...input.state,
       edgeElements: nextEdgeElements
@@ -162,11 +175,11 @@ const renderDottedEdgeElements = (input: RenderDottedEdgeElementsInput): DottedR
   return bumpDottedSeen({
     edgeElements: nextEdgeElements,
     bounds: expandBoundsWithPoints(
-        expandBoundsWithPoints(input.state.bounds, [start, end]),
-        input.points
+      expandBoundsWithPoints(input.state.bounds, [start.value, end.value]),
+      input.points
     ),
-      seenOut: input.state.seenOut,
-      seenIn: input.state.seenIn
+    seenOut: input.state.seenOut,
+    seenIn: input.state.seenIn
   }, fromKey, toKey)
 }
 
@@ -287,6 +300,25 @@ const getDottedRoute = (input: DottedRouteInput): readonly SvgPoint[] => {
   })
 }
 
+const getDottedRoutePointsForEdge = (input: {
+  readonly edge: DottedEdge
+  readonly state: DottedRenderState
+  readonly totals: { readonly outTotals: DottedEdgeCounts; readonly inTotals: DottedEdgeCounts }
+  readonly cfg: RenderConfig
+  readonly fromBounds: NodeBounds
+  readonly toBounds: NodeBounds
+}): readonly SvgPoint[] => {
+  const fromKey = String(input.edge.from)
+  const toKey = String(input.edge.to)
+  const fromIndex = numberOrDefault(input.state.seenOut[fromKey], 0)
+  const toIndex = numberOrDefault(input.state.seenIn[toKey], 0)
+  const fromTotal = numberOrDefault(input.totals.outTotals[fromKey], 1)
+  const toTotal = numberOrDefault(input.totals.inTotals[toKey], 1)
+  const fromSpread = getSpreadOffset(fromIndex, fromTotal, input.cfg)
+  const toSpread = getSpreadOffset(toIndex, toTotal, input.cfg)
+  return getDottedRoute({ fromBounds: input.fromBounds, toBounds: input.toBounds, cfg: input.cfg, fromSpread, toSpread })
+}
+
 const reduceOneDottedEdge = (input: ReduceOneDottedEdgeInput): DottedRenderState => {
   const fromBounds = getNodeBounds({
     id: input.edge.from,
@@ -302,17 +334,20 @@ const reduceOneDottedEdge = (input: ReduceOneDottedEdgeInput): DottedRenderState
     cfg: input.cfg,
     shadowBoundsMap: input.shadowBoundsMap
   })
-  if (fromBounds === undefined || toBounds === undefined) {
+  const fromBoundsOption = fromNullable(fromBounds)
+  const toBoundsOption = fromNullable(toBounds)
+  if (isNone(fromBoundsOption) || isNone(toBoundsOption)) {
     return input.state
   }
 
-  const fromKey = String(input.edge.from)
-  const toKey = String(input.edge.to)
-  const fromIndex = input.state.seenOut[fromKey] ?? 0
-  const toIndex = input.state.seenIn[toKey] ?? 0
-  const fromSpread = getSpreadOffset(fromIndex, input.totals.outTotals[fromKey] ?? 1, input.cfg)
-  const toSpread = getSpreadOffset(toIndex, input.totals.inTotals[toKey] ?? 1, input.cfg)
-  const points = getDottedRoute({ fromBounds, toBounds, cfg: input.cfg, fromSpread, toSpread })
+  const points = getDottedRoutePointsForEdge({
+    edge: input.edge,
+    state: input.state,
+    totals: input.totals,
+    cfg: input.cfg,
+    fromBounds: fromBoundsOption.value,
+    toBounds: toBoundsOption.value
+  })
   return renderDottedEdgeElements({
     state: input.state,
     edge: input.edge,
