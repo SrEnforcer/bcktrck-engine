@@ -1,3 +1,11 @@
+/**
+ * @module tests/factories/render-svg-slice
+ *
+ * Test fixture builders shared across unit and slice tests.
+ *
+ * @packageDocumentation
+ */
+
 import { intoMap } from '@tsfpp/prelude'
 import type { IconSpec } from '../../icons/render'
 import type { ResolvedNodeStyle, ResolvedTextStyles } from '../../style/dsl'
@@ -6,6 +14,7 @@ import type { DottedEdge, ShadowNode } from '../../types/org-tree'
 import { defaultRenderConfig } from '../../layout/render-svg'
 import type { EdgeRoute, IndexedNode, IndexedTree, LayoutPoint, PlacedStaff, PlacedTree, RenderConfig } from '../../layout/types'
 
+/** Build mkRenderSvgInput test fixture values. */
 export const mkRenderSvgInput = (): {
   readonly tree: { readonly rootId: string; readonly nodes: ReadonlyMap<string, IndexedNode> }
   readonly placed: { readonly rootId: string; readonly positions: ReadonlyMap<string, LayoutPoint> }
@@ -30,6 +39,7 @@ export const mkRenderSvgInput = (): {
   iconMap: intoMap<string, readonly IconSpec[]>([])
 })
 
+/** Build mkDottedInput test fixture values. */
 export const mkDottedInput = (input: {
   readonly dottedEdges: readonly DottedEdge[]
   readonly cfg: RenderConfig
@@ -58,6 +68,7 @@ export const mkDottedInput = (input: {
   shadowBoundsMap: intoMap([])
 })
 
+/** Build mkShadowFixtures test fixture values. */
 export const mkShadowFixtures = (): {
   readonly tree: IndexedTree
   readonly placed: PlacedTree
@@ -83,6 +94,7 @@ export const mkShadowFixtures = (): {
   shadowNodes: [{ id: asNodeId('shadow-root'), primary: asNodeId('root'), type: 'employee', label: 'Acting' }]
 })
 
+/** Build mkSharedGeometryFixtures test fixture values. */
 export const mkSharedGeometryFixtures = (): {
   readonly placed: {
     readonly rootId: string

@@ -1,3 +1,11 @@
+/**
+ * @module tests/factories/style
+ *
+ * Test fixture builders shared across unit and slice tests.
+ *
+ * @packageDocumentation
+ */
+
 import { intoMap } from '@tsfpp/prelude'
 import type { AstOrg } from '../../types/ast'
 import { asNodeId } from '../../types/branded'

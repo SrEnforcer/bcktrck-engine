@@ -1,3 +1,11 @@
+/**
+ * @module tests/factories/icons
+ *
+ * Test fixture builders shared across unit and slice tests.
+ *
+ * @packageDocumentation
+ */
+
 import type { IconBounds } from '../../icons/render'
 
 /** Build typed icon bounds for render tests. */

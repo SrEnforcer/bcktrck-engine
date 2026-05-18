@@ -1,8 +1,8 @@
-import { fromNullable, getOrElse, intoMap } from '@tsfpp/prelude'
+import { fromNullable, getOrElse } from '@tsfpp/prelude'
 import { describe, expect, it } from 'vitest'
-import type { PlacedTree } from './types'
 import { placeStaff } from './staff-placement'
 import {
+  mkPlacedFromEntries,
   mkStaffPlacementPlaced,
   mkStaffPlacementTree
 } from '../tests/factories/layout-slice'
@@ -45,7 +45,7 @@ describe('placeStaff when label is missing from staffLabels map', () => {
 describe('placeStaff when parent node position is missing', () => {
   it('returns no staff positions for that node', () => {
     const tree = mkStaffPlacementTree()
-    const placed: PlacedTree = { rootId: 'root', positions: intoMap([]) }
+    const placed = mkPlacedFromEntries([])
 
     const result = placeStaff(tree, placed)
 

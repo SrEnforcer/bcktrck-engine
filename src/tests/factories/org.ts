@@ -1,6 +1,15 @@
+/**
+ * @module tests/factories/org
+ *
+ * Test fixture builders shared across unit and slice tests.
+ *
+ * @packageDocumentation
+ */
+
 import { asDeptId, asNodeId } from '../../types/branded'
 import type { OrgNode } from '../../types/org-tree'
 
+/** Fixture type contract for DepartmentFactoryInput. */
 export type DepartmentFactoryInput = {
   readonly id: string
   readonly name: string

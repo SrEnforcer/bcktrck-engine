@@ -1,59 +1,33 @@
-import { describe, expect, it, vi } from 'vitest'
-
-vi.mock('./parser/parse', () => ({
-  parseBtl: vi.fn()
-}))
-
-vi.mock('./resolver/resolve', () => ({
-  resolveAst: vi.fn()
-}))
-
-import { parseBtl } from './parser/parse'
-import { resolveAst } from './resolver/resolve'
+import { describe, expect, it } from 'vitest'
 import { parseAndResolveBtl } from './parse-and-resolve'
-import { mkCompileAst, mkParseResolveTree } from './tests/factories/compile-slice'
 
-const mockedParseBtl = vi.mocked(parseBtl)
-const mockedResolveAst = vi.mocked(resolveAst)
+const validSource = ['org "Acme"', '  CEO @ceo', '    Engineer @eng'].join('\n')
 
 describe('parseAndResolveBtl when parsing fails', () => {
   it('returns a parseError result and skips resolution', () => {
-    const parseError = { ok: false, error: 'parse failed', line: 2, col: 3 } as const
-    mockedParseBtl.mockReturnValue(parseError)
+    const result = parseAndResolveBtl('org "Acme"\n  Alice @')
 
-    const result = parseAndResolveBtl('invalid source')
-
-    expect(result).toEqual({ ok: false, parseError })
+    expect(result.ok).toBe(false)
+    expect(result.ok ? '' : result.parseError?.error.includes('Expected handle identifier')).toBe(true)
   })
 })
 
 describe('parseAndResolveBtl when parsing succeeds and resolution fails', () => {
   it('returns resolveErrors from the resolver', () => {
-    const ast = mkCompileAst()
-    mockedParseBtl.mockReturnValue({ ok: true, value: ast, rest: [] })
-    mockedResolveAst.mockReturnValue({
-      ok: false,
-      errors: [{ kind: 'invalid_attr_value', handle: 'x', line: 1, col: 1, message: 'bad attr' }]
-    })
+    const source = [...validSource.split('\n'), 'links', '  @ceo --> @missing [kind: dt]'].join('\n')
+    const result = parseAndResolveBtl(source)
 
-    const result = parseAndResolveBtl('source')
-
-    expect(result).toEqual({
-      ok: false,
-      resolveErrors: [{ kind: 'invalid_attr_value', handle: 'x', line: 1, col: 1, message: 'bad attr' }]
-    })
+    expect(result.ok).toBe(false)
+    expect(result.ok ? '' : result.resolveErrors?.[0]?.kind).toBe('unknown_handle')
   })
 })
 
 describe('parseAndResolveBtl when parsing and resolution succeed', () => {
   it('returns ok with ast and resolved tree', () => {
-    const ast = mkCompileAst()
-    const tree = mkParseResolveTree()
-    mockedParseBtl.mockReturnValue({ ok: true, value: ast, rest: [] })
-    mockedResolveAst.mockReturnValue({ ok: true, tree })
+    const result = parseAndResolveBtl(validSource)
 
-    const result = parseAndResolveBtl('source')
-
-    expect(result).toEqual({ ok: true, ast, tree })
+    expect(result.ok).toBe(true)
+    expect(result.ok ? result.ast.name : '').toBe('Acme')
+    expect(result.ok ? result.tree.root.kind : 'none').toBe('employee')
   })
 })

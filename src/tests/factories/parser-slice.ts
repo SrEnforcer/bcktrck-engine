@@ -1,7 +1,16 @@
+/**
+ * @module tests/factories/parser-slice
+ *
+ * Test fixture builders shared across unit and slice tests.
+ *
+ * @packageDocumentation
+ */
+
 import type { Token } from '../../lexer/tokens'
 import type { Parser } from '../../parser/combinators'
 import { fromNullable, getOrElse } from '@tsfpp/prelude'
 
+/** Build mkParserToken test fixture values. */
 export const mkParserToken = (
   kind: Token['kind'],
   value: string = kind

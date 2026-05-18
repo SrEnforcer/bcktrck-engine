@@ -1,75 +1,33 @@
-import { describe, expect, it, vi } from 'vitest'
-import type { AstOrg } from '../types/ast'
-
-vi.mock('../lexer/tokenize', () => ({
-  tokenize: vi.fn()
-}))
-
-vi.mock('./grammar', () => ({
-  parse: vi.fn()
-}))
-
-import { tokenize } from '../lexer/tokenize'
-import { parse } from './grammar'
+import { describe, expect, it } from 'vitest'
 import { parseBtl } from './parse'
-
-const mockedTokenize = vi.mocked(tokenize)
-const mockedParse = vi.mocked(parse)
 
 const requireParseErr = (
   result: ReturnType<typeof parseBtl>
 ): Extract<ReturnType<typeof parseBtl>, { readonly ok: false }> =>
   result.ok ? expect.fail('Expected parseBtl to fail in this test setup') : result
 
-const minimalAst = (): AstOrg => ({
-  name: 'Acme',
-  attrs: [],
-  root: {
-    kind: 'employee',
-    line: 1,
-    col: 1,
-    displayName: 'CEO',
-    handle: 'ceo',
-    attrs: [],
-    layoutHints: [],
-    visualHints: [],
-    children: [],
-    staffNodes: []
-  },
-  links: [],
-  config: { pairs: [] }
-})
-
 describe('parseBtl when tokenize and grammar parse succeed', () => {
-  it('returns the grammar parse result unchanged', () => {
-    const expected = { ok: true, value: minimalAst(), rest: [] } as const
-    mockedTokenize.mockReturnValue([])
-    mockedParse.mockReturnValue(expected)
+  it('returns an AstOrg for valid source', () => {
+    const result = parseBtl(['org "Acme"', '  Alice @alice'].join('\n'))
 
-    const result = parseBtl('org acme')
-
-    expect(result).toEqual(expected)
+    expect(result.ok).toBe(true)
+    expect(result.ok ? result.value.name : '').toBe('Acme')
   })
 })
 
 describe('parseBtl when grammar parsing returns a parse error', () => {
-  it('returns that parse error unchanged', () => {
-    const expected = { ok: false, error: 'unexpected token', line: 2, col: 5 } as const
-    mockedTokenize.mockReturnValue([])
-    mockedParse.mockReturnValue(expected)
+  it('returns parse error details from grammar', () => {
+    const result = requireParseErr(parseBtl(['org "Acme"', '  Alice %mystery'].join('\n')))
 
-    const result = parseBtl('broken')
-
-    expect(result).toEqual(expected)
+    expect(result.error.includes('Unknown layout hint kind')).toBe(true)
+    expect(result.line).toBe(2)
   })
 })
 
-describe('parseBtl when tokenization throws', () => {
-  it('wraps the exception as a parser exception parse error', () => {
-    mockedTokenize.mockImplementation(() => JSON.parse('{'))
+describe('parseBtl when a handle marker has no identifier', () => {
+  it('returns parse error with expected-handle message', () => {
+    const result = requireParseErr(parseBtl(['org "Acme"', '  Alice @'].join('\n')))
 
-    const result = requireParseErr(parseBtl('boom'))
-
-    expect(result.error.startsWith('Parser exception:')).toBe(true)
+    expect(result.error.includes('Expected handle identifier')).toBe(true)
   })
 })

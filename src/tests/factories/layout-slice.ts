@@ -1,3 +1,11 @@
+/**
+ * @module tests/factories/layout-slice
+ *
+ * Test fixture builders shared across unit and slice tests.
+ *
+ * @packageDocumentation
+ */
+
 import { fromNullable, getOrElse, intoMap, isNone } from '@tsfpp/prelude'
 import type { IndexedNode, IndexedTree, LayoutPoint, PlacedTree, RenderConfig } from '../../layout/types'
 import { asDeptId, asNodeId } from '../../types/branded'
@@ -12,6 +20,7 @@ const optionalLayoutHint = (
   return isNone(layoutHintOption) ? {} : { layoutHint: layoutHintOption.value }
 }
 
+/** Build mkSliceRenderConfig test fixture values. */
 export const mkSliceRenderConfig = (): RenderConfig => ({
   nodeSize: 1,
   staffSize: 0.6,
@@ -68,6 +77,7 @@ const mkApplyHintChildNode = (input: {
   staffRight: []
 })
 
+/** Build mkApplyHintTree test fixture values. */
 export const mkApplyHintTree = (input: {
   readonly layoutHint: 'hanging' | 'hanging-left' | 'hanging-right' | 'hanging-both' | undefined
   readonly children: readonly string[]
@@ -79,6 +89,7 @@ export const mkApplyHintTree = (input: {
   ])
 })
 
+/** Build mkPlacedFromEntries test fixture values. */
 export const mkPlacedFromEntries = (
   entries: ReadonlyArray<readonly [string, { readonly x: number; readonly y: number }]>
 ): PlacedTree => ({
@@ -86,6 +97,7 @@ export const mkPlacedFromEntries = (
   positions: intoMap(entries)
 })
 
+/** Build mkRouteEdgesTree test fixture values. */
 export const mkRouteEdgesTree = (layoutHint: IndexedNode['layoutHint']): IndexedTree => ({
   rootId: 'root',
   nodes: intoMap([
@@ -105,6 +117,7 @@ export const mkRouteEdgesTree = (layoutHint: IndexedNode['layoutHint']): Indexed
   ])
 })
 
+/** Build mkRouteEdgesPlaced test fixture values. */
 export const mkRouteEdgesPlaced = (input: {
   readonly root: LayoutPoint
   readonly child: LayoutPoint
@@ -116,6 +129,7 @@ export const mkRouteEdgesPlaced = (input: {
   ])
 })
 
+/** Build mkIndexTreeEmployee test fixture values. */
 export const mkIndexTreeEmployee = (input: {
   readonly id: string
   readonly title: string
@@ -130,6 +144,7 @@ export const mkIndexTreeEmployee = (input: {
     .map((entry) => ({ id: asNodeId(entry.id), side: entry.side, label: entry.label }))
 })
 
+/** Build mkIndexTreeDepartment test fixture values. */
 export const mkIndexTreeDepartment = (
   id: string,
   name: string,
@@ -142,6 +157,7 @@ export const mkIndexTreeDepartment = (
   members
 })
 
+/** Build mkStaffPlacementTree test fixture values. */
 export const mkStaffPlacementTree = (): IndexedTree => ({
   rootId: 'root',
   nodes: intoMap([
@@ -163,6 +179,7 @@ export const mkStaffPlacementTree = (): IndexedTree => ({
   ])
 })
 
+/** Build mkStaffPlacementPlaced test fixture values. */
 export const mkStaffPlacementPlaced = (): PlacedTree => ({
   rootId: 'root',
   positions: intoMap([
@@ -170,6 +187,7 @@ export const mkStaffPlacementPlaced = (): PlacedTree => ({
   ])
 })
 
+/** Build mkSimpleOrgTree test fixture values. */
 export const mkSimpleOrgTree = (root: OrgNode): OrgTree => ({
   root,
   dottedEdges: [],

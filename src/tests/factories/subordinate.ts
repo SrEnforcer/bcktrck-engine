@@ -1,3 +1,11 @@
+/**
+ * @module tests/factories/subordinate
+ *
+ * Test fixture builders shared across unit and slice tests.
+ *
+ * @packageDocumentation
+ */
+
 import type { SubordinateCandidate } from '../../subordinate-count-policy'
 
 /** Build subordinate candidate fixtures for policy tests. */

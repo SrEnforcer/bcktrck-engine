@@ -1,5 +1,14 @@
+/**
+ * @module tests/factories/cli
+ *
+ * Test fixture builders shared across unit and slice tests.
+ *
+ * @packageDocumentation
+ */
+
 import { vi } from 'vitest'
 
+/** Fixture type contract for CliIoCapture. */
 export type CliIoCapture = {
   readonly io: {
     readonly readTextFile: (path: string) => Promise<string>
