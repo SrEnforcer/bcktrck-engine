@@ -1,9 +1,13 @@
 /**
+ * @module layout/route-edges
+ *
  * Edge routing: generates orthogonal waypoint paths for tree edges.
  *
  * Computes entry/exit ports on parent and child nodes, then produces
  * axis-aligned waypoint sequences (L-shaped or straight paths) suitable for SVG rendering.
  * Handles edge cases: same x/y coordinates, minor vertical misalignments.
+ *
+ * @packageDocumentation
  */
 
 import { fromNullable, isNone } from '@tsfpp/prelude'

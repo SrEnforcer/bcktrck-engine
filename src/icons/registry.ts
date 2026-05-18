@@ -1,4 +1,6 @@
 /**
+ * @module icons/registry
+ *
  * Curated Lucide icon registry for bcktrck.
  *
  * Each entry is an array of [tagName, attrs] pairs — the same format Lucide
@@ -6,6 +8,8 @@
  * stroke-width 2, round caps/joins).
  *
  * Add more icons by importing them from `lucide` and adding to ICON_REGISTRY.
+ *
+ * @packageDocumentation
  */
 
 import {
@@ -53,12 +57,15 @@ const setFromValues = <T>(values: ReadonlyArray<T>): ReadonlySet<T> => intoSet(v
 
 const mapFromEntries = <K, V>(entries: ReadonlyArray<readonly [K, V]>): ReadonlyMap<K, V> => intoMap(entries)
 
+/** Canonical set of valid icon anchor positions accepted by style resolution. */
 export const ICON_POSITIONS: ReadonlySet<string> = setFromValues<IconPos>([
   'upper-left', 'upper-right',
   'bottom-left', 'bottom-right',
 ])
 
+/** Default icon anchor used when no explicit icon position is provided. */
 export const DEFAULT_ICON_POS: IconPos = 'upper-left'
+/** Default icon pixel size used when no explicit icon size is provided. */
 export const DEFAULT_ICON_SIZE = 14
 
 const ICON_REGISTRY = mapFromEntries<string, IconNode>([
@@ -227,8 +234,11 @@ const ICON_REGISTRY = mapFromEntries<string, IconNode>([
   ['badge-check', BadgeCheck],
 ])
 
+/** Resolve an icon node by normalized registry name. */
 export const getIcon = (name: string): IconNode | undefined => ICON_REGISTRY.get(name)
 
+/** Check whether an icon name exists in the curated registry. */
 export const isKnownIcon = (name: string): boolean => ICON_REGISTRY.has(name)
 
+/** List all registered icon names for completion and diagnostics. */
 export const listIconNames = (): readonly string[] => [...ICON_REGISTRY.keys()]

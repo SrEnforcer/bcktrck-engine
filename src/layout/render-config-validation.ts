@@ -1,10 +1,24 @@
-import type { RenderConfig } from './types'
+/**
+ * @module layout/render-config-validation
+ *
+ * Runtime validation for render configuration values used by SVG projection.
+ *
+ * The validator accumulates all field errors so callers can present complete
+ * feedback instead of failing on the first invalid key.
+ *
+ * @packageDocumentation
+ */
 
+import type { RenderConfig } from './types'
+import { fromNullable, isSome } from '@tsfpp/prelude'
+
+/** Validation error for one render-config field. */
 export type ConfigValidationError = {
   readonly field: string
   readonly message: string
 }
 
+/** Success/failure ADT returned by render-config validation. */
 export type ConfigValidationResult =
   | { readonly ok: true }
   | { readonly ok: false; readonly errors: readonly ConfigValidationError[] }
@@ -136,6 +150,9 @@ export const validateRenderConfig = (cfg: RenderConfig): ConfigValidationResult 
       : undefined
   ]
 
-  const errors = candidates.filter((e): e is ConfigValidationError => e !== undefined)
+  const errors = candidates
+    .map(fromNullable)
+    .filter(isSome)
+    .map((option) => option.value)
   return errors.length === 0 ? { ok: true } : { ok: false, errors }
 }

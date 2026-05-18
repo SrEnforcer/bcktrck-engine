@@ -1,5 +1,9 @@
 /**
- * AST tree utilities.
+ * @module resolver/tree
+ *
+ * AST tree traversal utilities used by resolver validation and transformation logic.
+ *
+ * @packageDocumentation
  */
 
 import type { AstNode } from '../types/ast'

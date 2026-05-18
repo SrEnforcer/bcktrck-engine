@@ -1,4 +1,6 @@
 /**
+ * @module parse-and-resolve
+ *
  * PURE CORE — no side-effects; all I/O enters via parameters.
  *
  * Parse and resolve BTL source into a final organizational tree.
@@ -6,6 +8,8 @@
  * This module orchestrates the parsing (source → AST) and resolution (AST → OrgTree)
  * phases, capturing errors from both stages and returning a discriminated union
  * so callers can distinguish parse failures from semantic validation failures.
+ *
+ * @packageDocumentation
  */
 
 import type { ParseAndResolveResult } from './types/results'

@@ -80,6 +80,13 @@ const writeCompileFailure = (result: Extract<ReturnType<typeof compile>, { reado
  * @returns Promise resolving to the POSIX exit code: `0` on success, `1` on failure.
  */
 // DEVIATION(4.4): CLI entrypoint keeps control-flow branches colocated for deterministic user-facing diagnostics.
+/**
+ * Run the CLI command with injected arguments and I/O adapters.
+ *
+ * @param args Parsed CLI argument list without node/script prefix.
+ * @param io Boundary I/O adapter used for file reads and stream writes.
+ * @returns Promise of process-compatible exit code (`0` success, `1` failure).
+ */
 // eslint-disable-next-line complexity -- imperative CLI flow branches by user/help/parse/resolve/fs-error outcomes.
 export const runCli = async (args: readonly string[], io: CliIo = defaultIo): Promise<number> => {
   const normalizedArgs = args[0] === '--' ? args.slice(1) : args

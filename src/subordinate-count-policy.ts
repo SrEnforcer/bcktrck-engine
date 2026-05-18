@@ -1,3 +1,14 @@
+/**
+ * @module subordinate-count-policy
+ *
+ * Shared policy rules for deciding whether a direct-report candidate counts.
+ *
+ * This module isolates counting semantics so span-of-control and rendering
+ * features reuse one source of truth for vacancy and shadow inclusion.
+ *
+ * @packageDocumentation
+ */
+
 import { absurd } from '@tsfpp/prelude'
 
 /**

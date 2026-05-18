@@ -1,8 +1,12 @@
 /**
+ * @module parser/parse
+ *
  * BTL parser: tokenizes source and parses tokens into an Abstract Syntax Tree.
  *
  * Uses lexical analysis followed by a parser combinator-based grammar to produce
  * a well-formed AstOrg, or returns a detailed parse error on failure.
+ *
+ * @packageDocumentation
  */
 
 import { getStringField, isOk, isRecord, isSome, tryCatch } from '@tsfpp/prelude'

@@ -1,9 +1,13 @@
 /**
+ * @module types/config
+ *
  * Configuration types: theme, visual settings, and rendering behavior.
  *
  * `LayoutConfig` defines node spacing, sizing, and theme choices.
  * `PlacerStrategy` determines staff placement logic.
  * `Theme` holds color and font settings for rendering.
+ *
+ * @packageDocumentation
  */
 
 import type { AstLayoutHintKind } from './ast'

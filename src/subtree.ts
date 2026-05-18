@@ -13,6 +13,8 @@
  *
  *   const entries = listSubtrees(parsed.tree)      // populate dropdown
  *   const result  = compile(source, cfg, { subtreeId: entries[2].id })
+ *
+ * @packageDocumentation
  */
 
 import type { Option } from '@tsfpp/prelude'

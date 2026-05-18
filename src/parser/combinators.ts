@@ -1,8 +1,12 @@
 /**
+ * @module parser/combinators
+ *
  * Parser combinators for composing token parsers into a modular recursive-descent grammar.
  *
  * Provides combinator functions (map, seq, choice, many, opt, etc.) that enable
  * bottom-up composition of token-level parsers into higher-level declarative grammars.
+ *
+ * @packageDocumentation
  */
 
 import type { Option } from '@tsfpp/prelude'

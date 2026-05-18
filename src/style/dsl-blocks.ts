@@ -1,3 +1,11 @@
+/**
+ * @module style/dsl-blocks
+ *
+ * Helpers for extracting `defs` and `style` top-level DSL blocks while preserving line mapping.
+ *
+ * @packageDocumentation
+ */
+
 import { fromNullable, isNone } from '@tsfpp/prelude'
 
 /**

@@ -1,4 +1,13 @@
+/**
+ * @module layout/render-svg/shared
+ *
+ * Rendering helper module for SVG projection internals.
+ *
+ * @packageDocumentation
+ */
+
 import type { EdgeStyleValue, IndexedTree, LayoutNodeKind, PlacedTree, PlacedStaff, RenderConfig, RenderResult } from '../types'
+import { flatMapO, fromNullable, getOrElse, isSome, mapO, pipe } from '@tsfpp/prelude'
 import { renderIcon, renderIconSpec } from '../../icons/render'
 import type { IconSpec } from '../../icons/render'
 import type { ResolvedNodeStyle, ResolvedTextStyle } from '../../style/dsl'
@@ -118,6 +127,7 @@ export const emptyRenderBounds = (): RenderBounds => ({
   maxY: Number.NEGATIVE_INFINITY
 })
 
+/** Build expandBoundsWithPoint output for rendering pipeline use. */
 export const expandBoundsWithPoint = (bounds: RenderBounds, point: SvgPoint): RenderBounds => ({
   minX: Math.min(bounds.minX, point.x),
   minY: Math.min(bounds.minY, point.y),
@@ -125,11 +135,13 @@ export const expandBoundsWithPoint = (bounds: RenderBounds, point: SvgPoint): Re
   maxY: Math.max(bounds.maxY, point.y)
 })
 
+/** Build expandBoundsWithPoints output for rendering pipeline use. */
 export const expandBoundsWithPoints = (
   bounds: RenderBounds,
   points: readonly SvgPoint[]
 ): RenderBounds => points.reduce((acc, point) => expandBoundsWithPoint(acc, point), bounds)
 
+/** Build mergeRenderBounds output for rendering pipeline use. */
 export const mergeRenderBounds = (left: RenderBounds, right: RenderBounds): RenderBounds => ({
   minX: Math.min(left.minX, right.minX),
   minY: Math.min(left.minY, right.minY),
@@ -137,6 +149,7 @@ export const mergeRenderBounds = (left: RenderBounds, right: RenderBounds): Rend
   maxY: Math.max(left.maxY, right.maxY)
 })
 
+/** Build boundsFromRect output for rendering pipeline use. */
 export const boundsFromRect = (input: BoundsFromRectInput): RenderBounds => ({
   minX: input.x,
   minY: input.y,
@@ -144,14 +157,17 @@ export const boundsFromRect = (input: BoundsFromRectInput): RenderBounds => ({
   maxY: input.y + input.h
 })
 
+/** Build mergeAllBounds output for rendering pipeline use. */
 export const mergeAllBounds = (boundsList: readonly RenderBounds[]): RenderBounds =>
   boundsList.reduce((acc, bounds) => mergeRenderBounds(acc, bounds), emptyRenderBounds())
 
+/** Build mergeSectionRender output for rendering pipeline use. */
 export const mergeSectionRender = (left: SectionRender, right: SectionRender): SectionRender => ({
   elements: [...left.elements, ...right.elements],
   bounds: mergeRenderBounds(left.bounds, right.bounds)
 })
 
+/** Build mergeShadowBodyRender output for rendering pipeline use. */
 export const mergeShadowBodyRender = (left: ShadowBodyRender, right: ShadowBodyRender): ShadowBodyRender => ({
   bodyElements: [...left.bodyElements, ...right.bodyElements],
   edgeElements: [...left.edgeElements, ...right.edgeElements],
@@ -162,37 +178,45 @@ export const mergeShadowBodyRender = (left: ShadowBodyRender, right: ShadowBodyR
 export const getNodeBounds = (
   input: GetNodeBoundsInput
 ): NodeBounds | undefined => {
-  const pos = input.placed.positions.get(input.id)
-  if (pos !== undefined) {
+  const posOption = fromNullable(input.placed.positions.get(input.id))
+  if (isSome(posOption)) {
+    const pos = posOption.value
     const w = input.cfg.nodeSize * input.cfg.colWidth
     const h = input.cfg.nodeSize * input.cfg.rowHeight
     const p = { x: pos.x * input.cfg.colWidth, y: pos.y * input.cfg.rowHeight }
     return { cx: p.x + w / 2, cy: p.y + h / 2, w, h }
   }
 
-  const staffNode = input.staff.staff.find((s) => s.id === input.id)
-  if (staffNode !== undefined) {
+  const staffNodeOption = fromNullable(input.staff.staff.find((s) => s.id === input.id))
+  if (isSome(staffNodeOption)) {
+    const staffNode = staffNodeOption.value
     const w = input.cfg.staffSize * input.cfg.colWidth
     const h = input.cfg.staffSize * input.cfg.rowHeight
     const p = { x: staffNode.x * input.cfg.colWidth, y: staffNode.y * input.cfg.rowHeight }
     return { cx: p.x + w / 2, cy: p.y + h / 2, w, h }
   }
 
-  return input.shadowBoundsMap?.get(input.id)
+  const shadowBoundsOption = pipe(
+    fromNullable(input.shadowBoundsMap),
+    flatMapO((shadowBoundsMap) => fromNullable(shadowBoundsMap.get(input.id)))
+  )
+  return isSome(shadowBoundsOption) ? shadowBoundsOption.value : undefined
 }
 
 /** Looks up a center position from placed nodes or staff array. */
 export const getNodePosition = (
   input: GetNodePositionInput
 ): { readonly cx: number; readonly cy: number } | undefined => {
-  const pos = input.placed.positions.get(input.id)
-  if (pos !== undefined) {
+  const posOption = fromNullable(input.placed.positions.get(input.id))
+  if (isSome(posOption)) {
+    const pos = posOption.value
     const p = { x: pos.x * input.cfg.colWidth, y: pos.y * input.cfg.rowHeight }
     return { cx: p.x + (input.cfg.nodeSize * input.cfg.colWidth) / 2, cy: p.y + (input.cfg.nodeSize * input.cfg.rowHeight) / 2 }
   }
 
-  const staffNode = input.staff.staff.find((s) => s.id === input.id)
-  if (staffNode !== undefined) {
+  const staffNodeOption = fromNullable(input.staff.staff.find((s) => s.id === input.id))
+  if (isSome(staffNodeOption)) {
+    const staffNode = staffNodeOption.value
     const p = { x: staffNode.x * input.cfg.colWidth, y: staffNode.y * input.cfg.rowHeight }
     return { cx: p.x + (input.cfg.staffSize * input.cfg.colWidth) / 2, cy: p.y + (input.cfg.staffSize * input.cfg.rowHeight) / 2 }
   }
@@ -212,19 +236,27 @@ export const getFillColor = (kind: LayoutNodeKind, cfg: RenderConfig): string =>
   }
 }
 
+/** Build mergeTextStyle output for rendering pipeline use. */
 export const mergeTextStyle = (base: ResolvedTextStyle, override: ResolvedTextStyle): ResolvedTextStyle => ({
   ...base,
   ...override
 })
 
-export const textAttrs = (style: ResolvedTextStyle): string => [
-  style.color !== undefined ? `fill="${escapeXml(style.color)}"` : undefined,
-  style.fontSize !== undefined ? `font-size="${Math.round(style.fontSize)}px"` : undefined,
-  style.fontWeight !== undefined ? `font-weight="${escapeXml(style.fontWeight)}"` : undefined
-]
-  .filter((value): value is string => value !== undefined)
-  .join(' ')
+/** Build textAttrs output for rendering pipeline use. */
+export const textAttrs = (style: ResolvedTextStyle): string => {
+  const attrs = [
+    pipe(fromNullable(style.color), mapO((color) => `fill="${escapeXml(color)}"`)),
+    pipe(fromNullable(style.fontSize), mapO((fontSize) => `font-size="${Math.round(fontSize)}px"`)),
+    pipe(fromNullable(style.fontWeight), mapO((fontWeight) => `font-weight="${escapeXml(fontWeight)}"`))
+  ]
 
+  return attrs
+    .filter(isSome)
+    .map((attr) => attr.value)
+    .join(' ')
+}
+
+/** Build rectStrokeStyleAttrs output for rendering pipeline use. */
 export const rectStrokeStyleAttrs = (style: ResolvedNodeStyle | undefined): string => {
   switch (style?.borderStyle) {
     case undefined:
@@ -240,6 +272,7 @@ export const rectStrokeStyleAttrs = (style: ResolvedNodeStyle | undefined): stri
   }
 }
 
+/** Build edgeStrokeStyleAttrs output for rendering pipeline use. */
 export const edgeStrokeStyleAttrs = (edgeStyle: EdgeStyleValue | undefined): string => {
   switch (edgeStyle) {
     case undefined:
@@ -253,6 +286,7 @@ export const edgeStrokeStyleAttrs = (edgeStyle: EdgeStyleValue | undefined): str
   }
 }
 
+/** Build strokeWidthAttr output for rendering pipeline use. */
 export const strokeWidthAttr = (width: number): string => ` stroke-width="${width}"`
 
 const ICON_STACK_GAP = 2
@@ -265,15 +299,16 @@ type RenderNodeIconsParams = {
   readonly color: string
 }
 
+/** Build renderNodeIcons output for rendering pipeline use. */
 export const renderNodeIcons = (
   params: RenderNodeIconsParams
 ): string => {
   const { specs, bounds, color } = params
   const { x: nodeX, y: nodeY, width: nodeW, height: nodeH } = bounds
-  const first = specs[0]
-  if (specs.length === 1 && first !== undefined) {
+  const firstOption = fromNullable(specs[0])
+  if (specs.length === 1 && isSome(firstOption)) {
     return renderIconSpec({
-      spec: first,
+      spec: firstOption.value,
       bounds: { x: nodeX, y: nodeY, width: nodeW, height: nodeH },
       color
     })
@@ -291,12 +326,13 @@ export const renderNodeIcons = (
         y,
         size,
         color,
-        opacity: spec.opacity !== undefined ? spec.opacity : 0.3
+        opacity: pipe(fromNullable(spec.opacity), getOrElse(() => 0.3))
       })
     })
     .join('')
 }
 
+/** Build sanitizeRenderConfig output for rendering pipeline use. */
 export const sanitizeRenderConfig = (cfg: RenderConfig): RenderConfig => ({
   ...cfg,
   nodeBorder: escapeXml(cfg.nodeBorder),
@@ -315,8 +351,9 @@ const findFirstMissingPositionNodeId = (
   nodeIds: readonly string[],
   placed: PlacedTree
 ): string | undefined => {
-  const current = nodeIds[0]
-  if (current !== undefined) {
+  const currentOption = fromNullable(nodeIds[0])
+  if (isSome(currentOption)) {
+    const current = currentOption.value
     return placed.positions.has(current)
       ? findFirstMissingPositionNodeId(nodeIds.slice(1), placed)
       : current
@@ -329,8 +366,9 @@ export const validatePlacedNodePositions = (
   tree: IndexedTree,
   placed: PlacedTree
 ): RenderResult | undefined => {
-  const firstMissingNodeId = findFirstMissingPositionNodeId(Array.from(tree.nodes.keys()), placed)
-  if (firstMissingNodeId !== undefined) {
+  const firstMissingNodeIdOption = fromNullable(findFirstMissingPositionNodeId(Array.from(tree.nodes.keys()), placed))
+  if (isSome(firstMissingNodeIdOption)) {
+    const firstMissingNodeId = firstMissingNodeIdOption.value
     return {
       ok: false,
       error: {

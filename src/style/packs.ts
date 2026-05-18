@@ -1,4 +1,6 @@
 /**
+ * @module style/packs
+ *
  * PURE CORE — no side-effects; all I/O enters via parameters.
  *
  * Style pack registry and loader. A "pack" is a named collection of variable
@@ -6,6 +8,8 @@
  *
  * Packs let multiple visualizations of the same org share consistent theming
  * without duplicating rules or hunting for scattered style files.
+ *
+ * @packageDocumentation
  */
 
 // DEVIATION(2.4): Pack registry remains in one file while themed pack extraction is staged.

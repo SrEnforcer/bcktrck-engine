@@ -1,10 +1,14 @@
 /**
+ * @module style/dsl
+ *
  * PURE CORE — no side-effects; all I/O enters via parameters.
  *
  * Parses the `style` block embedded in BTL, strips it from the source while
  * preserving line numbers, and resolves selectors into per-node render styles.
  * This module owns the translation from textual style DSL to immutable maps
  * consumed by layout and rendering.
+ *
+ * @packageDocumentation
  */
 
 // DEVIATION(2.4): Style DSL remains in one module during incremental migration; rule parser and resolver extraction is planned.

@@ -1,13 +1,18 @@
 /**
+ * @module layout/render-svg
+ *
  * PURE CORE — no side-effects; all I/O enters via parameters.
  *
  * Public SVG rendering entrypoint for positioned org layouts.
+ *
+ * @packageDocumentation
  */
 
 import type { DottedEdge, ShadowNode } from '../types/org-tree'
 import type { EdgeRoute, IndexedTree, PlacedTree, PlacedStaff, RenderConfig, RenderResult } from './types'
 import type { ResolvedStyleMap, ResolvedTextStyles } from '../style/dsl'
 import type { IconSpec } from '../icons/render'
+import { fromNullable, isSome } from '@tsfpp/prelude'
 import { validatePlacedNodePositions } from './render-svg/shared'
 import { renderSvgProjection } from './render-svg/sections'
 
@@ -71,9 +76,9 @@ export const renderSvg = (
     iconMap
   } = input
 
-  const validation = validatePlacedNodePositions(tree, placed)
-  if (validation !== undefined) {
-    return validation
+  const validationOption = fromNullable(validatePlacedNodePositions(tree, placed))
+  if (isSome(validationOption)) {
+    return validationOption.value
   }
 
   return renderSvgProjection({

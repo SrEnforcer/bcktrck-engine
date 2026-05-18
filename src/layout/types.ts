@@ -1,3 +1,12 @@
+/**
+ * @module layout/types
+ *
+ * Shared layout and rendering contracts exchanged between indexing, placement,
+ * routing, and SVG projection modules.
+ *
+ * @packageDocumentation
+ */
+
 /** Distinguishes the semantic role of a node in the layout tree. */
 export type LayoutNodeKind = 'employee' | 'department' | 'vacancy'
 

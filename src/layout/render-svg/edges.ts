@@ -1,10 +1,19 @@
 /**
+ * @module layout/render-svg/edges
+ *
+ * Rendering helper module for SVG projection internals.
+ *
+ * @packageDocumentation
+ */
+
+/**
  * PURE CORE — no side-effects; all I/O enters via parameters.
  *
  * Staff connector and solid edge SVG element renderers.
  */
 
 import type { ResolvedStyleMap } from '../../style/dsl'
+import { fromNullable, getOrElse, isSome, pipe } from '@tsfpp/prelude'
 import type { EdgeRoute, IndexedTree, PlacedTree, PlacedStaff, RenderConfig } from '../types'
 import {
   boundsFromRect,
@@ -101,8 +110,9 @@ const renderStaffConnectorSide = (
   input: RenderStaffConnectorSideInput
 ): SectionRender =>
   input.staffIds.reduce<SectionRender>((nextSideState, staffId) => {
-    const staffPos = input.staffById[staffId]
-    if (staffPos !== undefined) {
+    const staffPosOption = fromNullable(input.staffById[staffId])
+    if (isSome(staffPosOption)) {
+      const staffPos = staffPosOption.value
       const staffX = staffPos.x * input.cfg.colWidth
       const staffW = input.cfg.staffSize * input.cfg.colWidth
       const x1 = input.isLeft ? input.parentX : input.parentX + input.nodeW
@@ -120,8 +130,9 @@ const renderStaffConnectorSide = (
 const renderStaffConnectorsForParent = (
   input: RenderStaffConnectorsForParentInput
 ): SectionRender => {
-  const parentPos = input.placed.positions.get(input.parentId)
-  if (parentPos !== undefined) {
+  const parentPosOption = fromNullable(input.placed.positions.get(input.parentId))
+  if (isSome(parentPosOption)) {
+    const parentPos = parentPosOption.value
     const nodeW = input.cfg.nodeSize * input.cfg.colWidth
     const nodeH = input.cfg.nodeSize * input.cfg.rowHeight
     const parentX = parentPos.x * input.cfg.colWidth
@@ -185,7 +196,7 @@ const renderRoutedSolidEdges = (
   }
 
   const pointsAttr = pixels.map((pt) => `${pt.x},${pt.y}`).join(' ')
-  const edgeWidth = route.edgeWidth !== undefined ? route.edgeWidth : 2
+  const edgeWidth = pipe(fromNullable(route.edgeWidth), getOrElse(() => 2))
   const element = `<polyline class="edge" points="${pointsAttr}" fill="none" stroke="${input.safeCfg.edgeStroke}"${strokeWidthAttr(edgeWidth)}${edgeStrokeStyleAttrs(route.edgeStyle)} />`
   return {
     elements: [...state.elements, element],
@@ -196,13 +207,15 @@ const renderRoutedSolidEdges = (
 const renderFallbackSolidEdges = (
   input: RenderFallbackSolidEdgesInput
 ): SectionRender => Array.from(input.tree.nodes.entries()).reduce<SectionRender>((state, [nodeId, node]) => {
-  const parentPos = input.placed.positions.get(nodeId)
-  if (parentPos !== undefined && node.children.length > 0) {
+  const parentPosOption = fromNullable(input.placed.positions.get(nodeId))
+  if (isSome(parentPosOption) && node.children.length > 0) {
+    const parentPos = parentPosOption.value
     const parentPixels = gridToPixels(parentPos.x, parentPos.y, input.cfg)
     return node.children.reduce<SectionRender>((childState, childId) => {
-      const childNode = input.tree.nodes.get(childId)
-      const childPos = input.placed.positions.get(childId)
-      if (childNode !== undefined && childPos !== undefined && !input.staffShadowIds.has(childId)) {
+      const childNodeOption = fromNullable(input.tree.nodes.get(childId))
+      const childPosOption = fromNullable(input.placed.positions.get(childId))
+      if (isSome(childNodeOption) && isSome(childPosOption) && !input.staffShadowIds.has(childId)) {
+        const childPos = childPosOption.value
         const childPixels = gridToPixels(childPos.x, childPos.y, input.cfg)
         const x1 = parentPixels.x + (input.cfg.nodeSize * input.cfg.colWidth) / 2
         const y1 = parentPixels.y + input.cfg.nodeSize * input.cfg.rowHeight
@@ -210,7 +223,7 @@ const renderFallbackSolidEdges = (
         const y2 = childPixels.y
         const edgeStyle = input.styleMap.get(childId)?.edgeStyle
         const widthValue = input.styleMap.get(childId)?.edgeWidth
-        const edgeWidth = widthValue !== undefined ? widthValue : 2
+        const edgeWidth = pipe(fromNullable(widthValue), getOrElse(() => 2))
         const element = `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${input.safeCfg.edgeStroke}"${strokeWidthAttr(edgeWidth)}${edgeStrokeStyleAttrs(edgeStyle)} />`
 
         return {

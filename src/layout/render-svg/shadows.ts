@@ -1,4 +1,12 @@
 /**
+ * @module layout/render-svg/shadows
+ *
+ * Rendering helper module for SVG projection internals.
+ *
+ * @packageDocumentation
+ */
+
+/**
  * PURE CORE — no side-effects; all I/O enters via parameters.
  *
  * Shadow node body, label, and connector SVG element renderers.

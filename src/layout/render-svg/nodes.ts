@@ -1,4 +1,12 @@
 /**
+ * @module layout/render-svg/nodes
+ *
+ * Rendering helper module for SVG projection internals.
+ *
+ * @packageDocumentation
+ */
+
+/**
  * PURE CORE — no side-effects; all I/O enters via parameters.
  *
  * Node body, staff body, and triangle SVG element renderers.
@@ -7,7 +15,7 @@
 /* eslint-disable max-lines */
 // DEVIATION(2.4): This module remains temporarily large during incremental migration and will be split into focused files in a follow-up slice.
 
-import { fromNullable, getOrElse, isNone, pipe } from '@tsfpp/prelude'
+import { flatMapO, fromNullable, getOrElse, isNone, mapO, pipe } from '@tsfpp/prelude'
 import type { IconSpec } from '../../icons/render'
 import type { ResolvedNodeStyle, ResolvedStyleMap, ResolvedTextStyles } from '../../style/dsl'
 import type { IndexedTree, PlacedTree, PlacedStaff, RenderConfig } from '../types'
@@ -505,8 +513,16 @@ const renderSubordinateCountBadge = (input: RenderSubordinateCountBadgeInput): s
 
 const resolveNodeRenderStyleContext = (input: ResolveNodeRenderStyleContextInput): NodeRenderStyleContext => {
   const style = input.styleMap.get(input.nodeId)
-  const fill = style?.backgroundColor !== undefined ? escapeXml(style.backgroundColor) : getFillColor(input.nodeKind, input.safeCfg)
-  const stroke = style?.borderColor !== undefined ? escapeXml(style.borderColor) : input.safeCfg.nodeBorder
+  const fill = pipe(
+    fromNullable(style?.backgroundColor),
+    mapO(escapeXml),
+    getOrElse(() => getFillColor(input.nodeKind, input.safeCfg))
+  )
+  const stroke = pipe(
+    fromNullable(style?.borderColor),
+    mapO(escapeXml),
+    getOrElse(() => input.safeCfg.nodeBorder)
+  )
   const textFontSize = pipe(
     fromNullable(toTextStyle(style).fontSize),
     getOrElse(() => input.cfg.fontSize)
@@ -529,8 +545,16 @@ const resolveStaffRenderStyleContext = (input: ResolveStaffRenderStyleContextInp
       return isNone(parentIdOption) ? undefined : input.styleMap.get(parentIdOption.value)
     })
   )
-  const fill = style?.backgroundColor !== undefined ? escapeXml(style.backgroundColor) : input.safeCfg.employeeFill
-  const stroke = style?.borderColor !== undefined ? escapeXml(style.borderColor) : input.safeCfg.nodeBorder
+  const fill = pipe(
+    fromNullable(style?.backgroundColor),
+    mapO(escapeXml),
+    getOrElse(() => input.safeCfg.employeeFill)
+  )
+  const stroke = pipe(
+    fromNullable(style?.borderColor),
+    mapO(escapeXml),
+    getOrElse(() => input.safeCfg.nodeBorder)
+  )
   const textFontSize = pipe(
     fromNullable(toTextStyle(style).fontSize),
     getOrElse(() => input.cfg.fontSize)
@@ -588,9 +612,12 @@ const renderTriangleElement = (input: RenderTriangleElementInput): string | unde
     return undefined
   }
 
-  const iconPos = input.iconSpecs !== undefined && input.iconSpecs.length > 0 && typeof input.iconSpecs[0]?.pos === 'string'
-    ? input.iconSpecs[0].pos
-    : 'bottom-right'
+  const iconPos = pipe(
+    fromNullable(input.iconSpecs),
+    flatMapO((iconSpecs) => fromNullable(iconSpecs[0])),
+    flatMapO((iconSpec) => fromNullable(iconSpec.pos)),
+    getOrElse(() => 'bottom-right')
+  )
   const corner = resolveTriangleCorner(iconPos)
   const size = Math.max(12, Math.min(input.w, input.h) * 0.18)
   const triOffset = 3

@@ -1,3 +1,14 @@
+/**
+ * @module layout/staff-placement
+ *
+ * Compute sidebar staff node positions relative to already placed tree nodes.
+ *
+ * Staff placement is deterministic and based on side, index, and configured
+ * offsets so render output is stable for identical layout inputs.
+ *
+ * @packageDocumentation
+ */
+
 import { fromNullable, getOrElse, isNone, pipe } from '@tsfpp/prelude'
 import type { IndexedTree, PlacedTree, PlacedStaff, StaffPosition } from './types'
 

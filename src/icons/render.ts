@@ -1,14 +1,19 @@
 /**
+ * @module icons/render
+ *
  * Renders a Lucide icon as an inline SVG group.
  *
  * Lucide icons use a 24×24 viewBox with stroke-based thin lines.
  * We scale to the requested pixel size and translate to (x, y).
+ *
+ * @packageDocumentation
  */
 
 import type { IconNode, IconPos } from './registry'
 import { fromNullable, getOrElse, isNone } from '@tsfpp/prelude'
 import { getIcon, DEFAULT_ICON_POS, DEFAULT_ICON_SIZE } from './registry'
 
+/** Re-export icon anchor position literals used by style and render contracts. */
 export type { IconPos }
 
 /**

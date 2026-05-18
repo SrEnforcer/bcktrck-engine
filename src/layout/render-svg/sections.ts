@@ -1,4 +1,12 @@
 /**
+ * @module layout/render-svg/sections
+ *
+ * Rendering helper module for SVG projection internals.
+ *
+ * @packageDocumentation
+ */
+
+/**
  * PURE CORE — no side-effects; all I/O enters via parameters.
  *
  * Projection orchestrator: assembles all section renders into a final SVG document.

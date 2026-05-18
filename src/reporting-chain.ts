@@ -1,3 +1,14 @@
+/**
+ * @module reporting-chain
+ *
+ * Compute managerial and alternative accountability chains from an org tree.
+ *
+ * The module builds parent and dotted-edge indexes once per invocation so
+ * all chain queries remain deterministic and total for the same input tree.
+ *
+ * @packageDocumentation
+ */
+
 import { assoc, conj, entriesOfMap, fromNullable, getOrElse, intoMap, intoSet, isNone } from '@tsfpp/prelude'
 import type { DeptId, NodeId } from './types/branded'
 import type { DottedEdge, OrgNode, OrgTree } from './types/org-tree'

@@ -1,3 +1,11 @@
+/**
+ * @module layout/render-svg/text
+ *
+ * Rendering helper module for SVG projection internals.
+ *
+ * @packageDocumentation
+ */
+
 import type { ResolvedTextStyle, ResolvedTextStyles } from '../../style/dsl'
 import { fromNullable, getOrElse, isNone } from '@tsfpp/prelude'
 import { escapeXml, mergeTextStyle, textAttrs } from './shared'

@@ -1,4 +1,6 @@
 /**
+ * @module types/branded
+ *
  * Branded types: provide compile-time distinctions between similar string-based identifiers.
  *
  * - `NodeId`: identifies an employee or similar entity
@@ -6,6 +8,8 @@
  * - `Handle`: a user-defined reference string (may be explicit or auto-generated)
  *
  * These are opaque at runtime but help catch semantic errors at type-check time.
+ *
+ * @packageDocumentation
  */
 
 type Brand<T, B extends string> = T & { readonly __brand: B }

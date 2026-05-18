@@ -1,15 +1,20 @@
 /**
+ * @module types/org-tree
+ *
  * Organizational tree types: semantic representation after resolution.
  *
  * `OrgNode` encodes hierarchy (children, staff relationships) and metadata (title, FTE, etc.).
  * `DottedEdge` and `ShadowNode` represent computed/inferred relationships.
  * `OrgTree` is the resolved tree ready for layout and rendering.
+ *
+ * @packageDocumentation
  */
 
 import type { DeptId, NodeId } from './branded'
 import type { AstLayoutHintKind } from './ast'
 import type { IconPos } from '../icons/render'
 
+/** Metadata payload attached to employee and vacancy nodes. */
 export type HrMetadata = {
   readonly title: string
   readonly department?: DeptId
@@ -23,12 +28,14 @@ export type HrMetadata = {
   readonly iconOpacity?: number
 }
 
+/** Staff sidecar node rendered next to a primary org node. */
 export type StaffNode = {
   readonly id: NodeId
   readonly side: 'left' | 'right'
   readonly label: string
 }
 
+/** Resolved organization node ADT used by layout and rendering stages. */
 export type OrgNode =
   | {
       readonly kind: 'employee'
@@ -60,6 +67,7 @@ export type OrgNode =
       readonly triangleEffect?: { readonly color: string }
     }
 
+/** Cross-hierarchy accountability edge (dotted connector) definition. */
 export type DottedEdge = {
   readonly from: NodeId
   readonly to: NodeId
@@ -68,6 +76,7 @@ export type DottedEdge = {
   readonly kind?: string
 }
 
+/** Shadow node specification for secondary placement of an existing primary node. */
 export type ShadowNode = {
   readonly id: NodeId
   readonly primary: NodeId
@@ -78,6 +87,7 @@ export type ShadowNode = {
   readonly hideConnector?: boolean
 }
 
+/** Fully resolved organizational tree plus optional dotted/shadow overlays. */
 export type OrgTree = {
   readonly root: OrgNode
   readonly dottedEdges: readonly DottedEdge[]

@@ -1,4 +1,6 @@
 /**
+ * @module parser/grammar
+ *
  * PURE CORE — no side-effects; all I/O enters via parameters.
  *
  * BTL grammar: defines the structure of valid source documents.
@@ -6,6 +8,8 @@
  * Orchestrates parsing of top-level sections (config, links, org) and recursively
  * handles node definitions, attributes, layout hints, and staff assignments.
  * Detailed error messages with line/col positions aid debugging.
+ *
+ * @packageDocumentation
  */
 
 // DEVIATION(2.4): Grammar remains centralized during migration from engine; decomposition into focused parser modules is planned.

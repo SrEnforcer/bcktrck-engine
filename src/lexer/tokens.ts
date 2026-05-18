@@ -1,8 +1,12 @@
 /**
+ * @module lexer/tokens
+ *
  * Token type definitions: represents lexically significant elements recognized during tokenization.
  *
  * Tokens include keywords (config, org, links, node types), operators (brackets, colons, etc.),
  * literals (identifiers, dates, numbers, URLs), indentation markers, and comment/EOF sentinels.
+ *
+ * @packageDocumentation
  */
 
 /**

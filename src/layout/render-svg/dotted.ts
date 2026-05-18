@@ -1,5 +1,13 @@
+/**
+ * @module layout/render-svg/dotted
+ *
+ * Rendering helper module for SVG projection internals.
+ *
+ * @packageDocumentation
+ */
+
 import type { DottedEdge } from '../../types/org-tree'
-import { fromNullable, getOrElse, isNone, pipe } from '@tsfpp/prelude'
+import { fromNullable, getOrElse, isNone, isSome, mapO, pipe } from '@tsfpp/prelude'
 import type { PlacedTree, PlacedStaff, RenderConfig } from '../types'
 import { emptyRenderBounds, escapeXml, expandBoundsWithPoints, getNodeBounds, type NodeBounds, type RenderBounds, type SvgPoint } from './shared'
 
@@ -111,12 +119,12 @@ const buildDottedEdgeTotals = (dottedEdges: readonly DottedEdge[]): {
 )
 
 const getLabelAnchorForPolyline = (points: readonly SvgPoint[]): SvgPoint => {
-  const p1 = points[1]
-  const p2 = points[2]
-  if (points.length >= 4 && p1 !== undefined && p2 !== undefined && Math.abs(p1.y - p2.y) < 0.01) {
+  const p1Option = fromNullable(points[1])
+  const p2Option = fromNullable(points[2])
+  if (points.length >= 4 && isSome(p1Option) && isSome(p2Option) && Math.abs(p1Option.value.y - p2Option.value.y) < 0.01) {
     return {
-      x: (p1.x + p2.x) / 2,
-      y: p1.y
+      x: (p1Option.value.x + p2Option.value.x) / 2,
+      y: p1Option.value.y
     }
   }
 
@@ -155,12 +163,18 @@ const bumpDottedSeen = (state: DottedRenderState, fromKey: string, toKey: string
 const renderDottedEdgeElements = (input: RenderDottedEdgeElementsInput): DottedRenderState => {
   const fromKey = String(input.edge.from)
   const toKey = String(input.edge.to)
+  const dottedLabelElements = pipe(
+    fromNullable(input.edge.label),
+    mapO((label) => label.length > 0
+      ? [dottedLabelElement({ label, points: input.points, cfg: input.cfg, safeCfg: input.safeCfg })]
+      : []
+    ),
+    getOrElse<readonly string[]>(() => [])
+  )
   const nextEdgeElements = [
     ...input.state.edgeElements,
     dottedEdgeElement(input.points, input.safeCfg),
-    ...(input.edge.label !== undefined && input.edge.label.length > 0
-      ? [dottedLabelElement({ label: input.edge.label, points: input.points, cfg: input.cfg, safeCfg: input.safeCfg })]
-      : [])
+    ...dottedLabelElements
   ]
 
   const start = fromNullable(input.points[0])

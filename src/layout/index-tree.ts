@@ -1,9 +1,13 @@
 /**
+ * @module layout/index-tree
+ *
  * Tree indexer: transforms an OrgTree into a flat indexed representation for layout algorithms.
  *
  * Creates a Map of all nodes (indexed by string id) with their structural relationships:
  * children, parent, depth, and left/right staff assignments. This flat indexed form
  * enables efficient tree traversal during layout, positioning, and rendering.
+ *
+ * @packageDocumentation
  */
 
 import type { DeptId, NodeId } from '../types/branded'

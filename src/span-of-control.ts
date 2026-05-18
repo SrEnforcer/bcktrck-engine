@@ -12,6 +12,8 @@
  * present.  Otherwise the span is derived by counting qualifying direct-report
  * child nodes, excluding organisational unit wrappers (departments/teams) and,
  * by default, shadow placements.
+ *
+ * @packageDocumentation
  */
 
 import { absurd, fromNullable, intoSet, isNone } from '@tsfpp/prelude'
