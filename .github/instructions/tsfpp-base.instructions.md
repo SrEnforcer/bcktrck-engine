@@ -24,6 +24,8 @@ Full standard: `node_modules/@tsfpp/standard/spec/CODING_STANDARD.md`
 - `new Map()` `new Set()` — use `intoMap` / `intoSet` from `@tsfpp/prelude`
 - `if (x === null)` `if (x !== null)` `if (x === undefined)` `if (x !== undefined)` `if (!x)` `x ?? y` — any nullability check in any form; use `fromNullable` → `Option<T>`, then `isSome` / `isNone` / `getOrElse`
 - `try/catch` in core — use `tryCatch` / `tryCatchAsync` from `@tsfpp/prelude`
+- `console.log` `console.error` `console.warn` `console.info` — anywhere except `main.ts` / `server.ts` startup; use the injected `Logger` port from `@tsfpp/prelude`
+- `process.env` outside the config loader — use the typed `Config` record injected as a dependency
 
 ## Always
 
@@ -84,6 +86,9 @@ const head = <A>(xs: ReadonlyArray<A>): Option<A> =>
 ## Imports
 
 All ADT constructors, combinators, and utilities come from `@tsfpp/prelude`. Never import from `ramda` directly.
+
+Logger port: `import { type Logger, type LogEntry } from '@tsfpp/prelude'`
+Config loader: `import { loadConfig, type ConfigError } from '@tsfpp/boundary'`
 
 ## Markers
 

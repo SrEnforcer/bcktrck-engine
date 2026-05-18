@@ -1,7 +1,7 @@
 import * as fc from 'fast-check'
 import { describe, expect, it } from 'vitest'
 import { countDirectSubordinates, isCountedDirectSubordinate, type SubordinateCandidate, type SubordinateCountPolicy } from './subordinate-count-policy'
-import { mkSubordinateCandidate } from './tests/factories/subordinate'
+import { mkSubordinateCandidate } from '../tests/factories/subordinate'
 
 describe('isCountedDirectSubordinate when the candidate is a department', () => {
   it('returns false', () => {

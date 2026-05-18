@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { asDeptId, asNodeId } from './types/branded'
-import type { OrgTree } from './types/org-tree'
+import { asDeptId, asNodeId } from '../types/branded'
+import type { OrgTree } from '../types/org-tree'
 import { computeAltChain, computeReportingChain, computeVerticalPath } from './reporting-chain'
 
 const nCeo = asNodeId('ceo')

@@ -17,3 +17,4 @@ and supplemented during development via the `/trunk-changelog` prompt.
 
 ### Chores
 - `chore(tooling): upgrade TSF++ agents and standard dependencies` — Aligns local tooling and rule enforcement with newer TSF++ releases for development-time consistency.
+- `chore(repo): migrate release-please manifest to canonical path` — Restores release automation compatibility by using the expected manifest filename for trunk release workflows.

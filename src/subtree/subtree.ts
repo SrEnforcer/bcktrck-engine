@@ -19,8 +19,8 @@
 
 import type { Option } from '@tsfpp/prelude'
 import { entriesOfMap, fromNullable, getOrElse, intoMap, intoSet, isNone, none, some } from '@tsfpp/prelude'
-import { asNodeId } from './types/branded'
-import type { OrgNode, OrgTree } from './types/org-tree'
+import { asNodeId } from '../types/branded'
+import type { OrgNode, OrgTree } from '../types/org-tree'
 
 // ---------------------------------------------------------------------------
 // Public types

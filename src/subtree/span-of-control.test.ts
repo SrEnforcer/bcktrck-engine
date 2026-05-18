@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { asDeptId, asNodeId } from './types/branded'
+import { asDeptId, asNodeId } from '../types/branded'
 import { defaultSpanOfControlOptions, spanOfControl } from './span-of-control'
-import type { OrgNode, OrgTree } from './types/org-tree'
+import type { OrgNode, OrgTree } from '../types/org-tree'
 
 const nMgr = asNodeId('mgr')
 const nEmp = asNodeId('emp')

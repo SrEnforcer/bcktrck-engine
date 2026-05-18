@@ -1,9 +1,9 @@
 import { isNone, isSome } from '@tsfpp/prelude'
 import { describe, expect, it } from 'vitest'
-import { asNodeId } from './types/branded'
-import type { OrgTree } from './types/org-tree'
+import { asNodeId } from '../types/branded'
+import type { OrgTree } from '../types/org-tree'
 import { isolateSubtree, isolateSubtrees, listSubtrees } from './subtree'
-import { mkOrgDepartment, mkOrgEmployee } from './tests/factories/org'
+import { mkOrgDepartment, mkOrgEmployee } from '../tests/factories/org'
 
 const sampleTree = (): OrgTree => {
   const engLead = mkOrgEmployee({ id: 'n-eng', title: 'Engineering Lead', children: [] })

@@ -152,6 +152,9 @@ Do not hand-roll what the prelude already provides.
 | Key/value lookup | `intoMap`, `lookup`, `assoc`, `dissoc` |
 | Set membership | `intoSet`, `conj`, `disj`, `member` |
 | Exhaustive match | `absurd` |
+| Application logging | `Logger` port — `import { type Logger } from '@tsfpp/prelude'`; inject as dependency; never `console.*` |
+| Config access | Receive `Config` as a dependency; never read `process.env` directly |
+| Config loading (entry point only) | `loadConfig` — `import { loadConfig } from '@tsfpp/boundary'` |
 
 If you are about to write a `try/catch`, a `null` check, an `if (x === undefined)`,
 a `x ?? fallback`, or a `.map()` that can fail — stop and use the prelude equivalent instead.

@@ -24,18 +24,18 @@ export type { DottedEdge, HrMetadata, OrgNode, OrgTree, ShadowNode, StaffNode } 
 export type { ParseAndResolveResult, ParseErr, ParseOk, ParseResult, ResolveError, ResolveErrorKind, ResolveResult } from './types/results'
 /** Re-export layout engine runtime contracts used by routing and rendering steps. */
 export type { EdgeRoute, EdgeRoutePoint, IndexedNode, IndexedTree, LayoutNodeKind, LayoutPoint, PlacedTree, PlacedStaff, RenderConfig, RenderError, RenderResult, RenderedSvg, StaffPosition } from './layout/types'
-export { computeReportingChain, computeVerticalPath, computeAltChain } from './reporting-chain'
+export { computeReportingChain, computeVerticalPath, computeAltChain } from './subtree/reporting-chain'
 /** Re-export reporting-chain output types. */
-export type { ReportingChain, VerticalPath, AltChain } from './reporting-chain'
-export { listSubtrees, isolateSubtree, isolateSubtrees } from './subtree'
+export type { ReportingChain, VerticalPath, AltChain } from './subtree/reporting-chain'
+export { listSubtrees, isolateSubtree, isolateSubtrees } from './subtree/subtree'
 /** Re-export subtree listing DTOs for selector UIs. */
-export type { SubtreeEntry } from './subtree'
-export { spanOfControl, defaultSpanOfControlOptions } from './span-of-control'
+export type { SubtreeEntry } from './subtree/subtree'
+export { spanOfControl, defaultSpanOfControlOptions } from './subtree/span-of-control'
 /** Re-export span-of-control options and result contracts. */
-export type { SpanOfControlOptions, SpanOfControlResult } from './span-of-control'
-export { countDirectSubordinates, isCountedDirectSubordinate } from './subordinate-count-policy'
+export type { SpanOfControlOptions, SpanOfControlResult } from './subtree/span-of-control'
+export { countDirectSubordinates, isCountedDirectSubordinate } from './subtree/subordinate-count-policy'
 /** Re-export direct subordinate counting policy/value types. */
-export type { SubordinateCandidate, SubordinateCountPolicy, SubordinateKind } from './subordinate-count-policy'
+export type { SubordinateCandidate, SubordinateCountPolicy, SubordinateKind } from './subtree/subordinate-count-policy'
 export { indexTree } from './layout/index-tree'
 export { buchheim } from './layout/buchheim'
 export { applyLayoutHints } from './layout/apply-layout-hints'
@@ -47,7 +47,7 @@ export { renderSvg, defaultRenderConfig } from './layout/render-svg'
 export { validateRenderConfig } from './layout/render-config-validation'
 /** Re-export render config validation result contracts. */
 export type { ConfigValidationError, ConfigValidationResult } from './layout/render-config-validation'
-export { parseAndResolveBtl } from './parse-and-resolve'
+export { parseAndResolveBtl } from './subtree/parse-and-resolve'
 export { compile, listSubtreesFromSource } from './compile'
 /** Re-export compile pipeline option/result contracts. */
 export type { CompileOptions, CompileResult, CompileOk, CompileErr } from './compile'

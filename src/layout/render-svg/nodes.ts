@@ -19,7 +19,7 @@ import { flatMapO, fromNullable, getOrElse, isNone, mapO, pipe } from '@tsfpp/pr
 import type { IconSpec } from '../../icons/render'
 import type { ResolvedNodeStyle, ResolvedStyleMap, ResolvedTextStyles } from '../../style/dsl'
 import type { IndexedTree, PlacedTree, PlacedStaff, RenderConfig } from '../types'
-import { countDirectSubordinates } from '../../subordinate-count-policy'
+import { countDirectSubordinates } from '../../subtree/subordinate-count-policy'
 import { buildStyledLabelLines, fitFontSizeToBox, renderStyledLabelElement, toTextStyle } from './text'
 import {
   boundsFromRect,

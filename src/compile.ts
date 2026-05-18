@@ -19,8 +19,8 @@
 
 import type { Option } from '@tsfpp/prelude'
 import { fromNullable, getOrElse, intoMap, isNone, isSome, none, some } from '@tsfpp/prelude'
-import { parseAndResolveBtl } from './parse-and-resolve'
-import { isolateSubtree, isolateSubtrees, listSubtrees } from './subtree'
+import { parseAndResolveBtl } from './subtree/parse-and-resolve'
+import { isolateSubtree, isolateSubtrees, listSubtrees } from './subtree/subtree'
 import { indexTree } from './layout/index-tree'
 import { buchheim } from './layout/buchheim'
 import { applyLayoutHints } from './layout/apply-layout-hints'
@@ -33,7 +33,7 @@ import type { ParseErr, ResolveError } from './types/results'
 import type { OrgNode, OrgTree } from './types/org-tree'
 import type { IconSpec } from './icons/render'
 import type { ResolvedNodeStyle } from './style/dsl'
-import type { SubtreeEntry } from './subtree'
+import type { SubtreeEntry } from './subtree/subtree'
 
 /**
  * Successful compile result. Extends `RenderedSvg` with a discriminant `ok: true`

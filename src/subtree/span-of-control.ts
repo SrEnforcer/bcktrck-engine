@@ -17,8 +17,8 @@
  */
 
 import { absurd, fromNullable, intoSet, isNone } from '@tsfpp/prelude'
-import type { DeptId, NodeId } from './types/branded'
-import type { OrgNode, OrgTree } from './types/org-tree'
+import type { DeptId, NodeId } from '../types/branded'
+import type { OrgNode, OrgTree } from '../types/org-tree'
 import { countDirectSubordinates, type SubordinateCountPolicy } from './subordinate-count-policy'
 
 // ---------------------------------------------------------------------------

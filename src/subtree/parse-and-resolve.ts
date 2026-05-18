@@ -12,10 +12,10 @@
  * @packageDocumentation
  */
 
-import type { ParseAndResolveResult } from './types/results'
+import type { ParseAndResolveResult } from '../types/results'
 
-import { parseBtl } from './parser/parse'
-import { resolveAst } from './resolver/resolve'
+import { parseBtl } from '../parser/parse'
+import { resolveAst } from '../resolver/resolve'
 
 type ParseAndResolveOptions = {
   readonly variables?: ReadonlyMap<string, string>

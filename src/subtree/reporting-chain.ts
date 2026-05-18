@@ -10,8 +10,8 @@
  */
 
 import { assoc, conj, entriesOfMap, fromNullable, getOrElse, intoMap, intoSet, isNone } from '@tsfpp/prelude'
-import type { DeptId, NodeId } from './types/branded'
-import type { DottedEdge, OrgNode, OrgTree } from './types/org-tree'
+import type { DeptId, NodeId } from '../types/branded'
+import type { DottedEdge, OrgNode, OrgTree } from '../types/org-tree'
 
 /**
  * An upward path from a target node to the root, including both person and department ids.

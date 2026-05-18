@@ -1,7 +1,7 @@
 ---
 description: TSF++ standards compliance auditor. Produces a structured markdown report in docs/audits/ with per-slice checkboxes.
 name: tsfpp-audit
-argument-hint: "target=<path|package|layer> focus=<all|types|boundary|complexity|loc|annotations|security|react|data|prelude|test>"
+argument-hint: "target=<path|package|layer> focus=<all|types|boundary|complexity|loc|annotations|security|react|data|prelude|test|log|config>"
 tools:
   - edit/createFile
   - edit/editFiles
@@ -44,7 +44,7 @@ If `target` and `focus` are present in the message (e.g. `target=src/ focus=test
 If and only if either is missing and cannot be inferred, ask once:
 
 > **Target** — path, package name, or layer to audit (e.g. `src/domain`, `@tsfpp/prelude`, `api layer`)?
-> **Focus** — `all` · `types` · `boundary` · `complexity` · `loc` · `annotations` · `security` · `react` · `data` · `prelude` · `test` · or comma-separated combination?
+> **Focus** — `all` · `types` · `boundary` · `complexity` · `loc` · `annotations` · `security` · `react` · `data` · `prelude` · `test` · `log` · `config` · or comma-separated combination?
 
 ---
 
@@ -160,12 +160,26 @@ Append each completed slice to the report:
 - [ ] 6.3 — No `null`/`undefined` propagation; use `Option<A>`
 - [ ] 6.6 — `Promise.allSettled` over `Promise.all` when partial failure is meaningful
 
-**Annotations (§7)**
-- [ ] 7.x — JSDoc on every exported symbol (`@param`, `@returns`; `@law` on combinators)
+**Annotations (§7 + ANNOTATION_CODING_STANDARD — cross-cutting, always checked)**
+- [ ] Module-level JSDoc block present on all files with public exports
+- [ ] Every exported symbol has a JSDoc block
+- [ ] `@param` describes domain constraint (not the type); `@returns` describes meaning (not the type)
+- [ ] `@law` present on all combinators with algebraic properties
+- [ ] `@example` present on smart constructors and non-obvious combinators
+- [ ] No comments that paraphrase the code; no commented-out code
+- [ ] Code markers follow `// MARKER(author, YYYY-MM-DD[, TICKET]): description` format
+- [ ] Every `eslint-disable` paired with a `// DEVIATION(N.M): <reason>` comment
+- [ ] For full annotation audit: use `focus=annotations`
 
-**Boundary and imports (§8–§9)**
-- [ ] 8.4 — Parse, don't validate: `unknown` converted to domain types at the boundary
-- [ ] 9.x — No `import from 'ramda'`; use `@tsfpp/prelude`
+**Security (SECURITY_CODING_STANDARD — cross-cutting, always checked)**
+- [ ] No secrets, credentials, or tokens in source code or committed config
+- [ ] No sensitive data (PII, credentials, tokens) in error messages or log output
+- [ ] No `eval`, `Function()`, or dynamic `import()` with user-controlled input
+- [ ] User input not reflected in error responses without sanitisation
+- [ ] For full security audit: use `focus=security`
+
+**Boundary and parse (§8)**
+- [ ] 8.4 — Parse, don't validate: `unknown` converted to domain types at the boundary via smart constructors or Zod
 
 **Size limits (§11)**
 - [ ] 11.1 — One type / one responsibility per file
@@ -345,7 +359,6 @@ Cross-cutting — applies to all layers. Check for hand-rolled patterns that `@t
 | `.map()` on a fallible function | MUST | `traverseArray` |
 | `new Map()` | MUST | `intoMap([...])` |
 | `new Set()` | MUST | `intoSet([...])` |
-| `import ... from 'ramda'` | MUST | `@tsfpp/prelude` |
 | `result._tag === 'Ok'` | MUST | `isOk(result)` |
 | `option._tag === 'Some'` | MUST | `isSome(option)` |
 | `Result<void, E>` | MUST | `Result<Unit, E>` with `ok(unit)` |
@@ -360,7 +373,6 @@ Checklist:
 - [ ] No `try/catch` outside adapter boundaries — use `tryCatch`/`tryCatchAsync`
 - [ ] No `.map()` on fallible function — use `traverseArray`
 - [ ] No `new Map()` / `new Set()` — use `intoMap` / `intoSet`
-- [ ] No `import from 'ramda'`
 - [ ] Prelude ADTs accessed via exported guards (`isOk`, `isSome`), never `._tag` directly
 - [ ] No `Result<void, E>` — use `Result<Unit, E>`
 - [ ] Side effects in pipelines via `tap` / `tapErr`
@@ -412,8 +424,60 @@ Checklist:
 - [ ] 4.4 DAL — insert+read round-trip tested; not-found returns `None`
 - [ ] 4.5 React — loading state, error state, and user interactions all covered
 
+### `log`
+Full reference: `node_modules/@tsfpp/standard/spec/LOG_CODING_STANDARD.md`
+
+Cross-cutting — apply to every file regardless of other focus selections.
+
+- [ ] No `console.*` calls outside `main.ts` / `server.ts`
+- [ ] `Logger` port imported from `@tsfpp/prelude`; never a concrete library
+- [ ] `Logger` injected as a dependency; never imported as a singleton
+- [ ] All `message` fields use dot-separated event-name format (`user.created`, not `"User was created"`)
+- [ ] Every request-scoped log entry includes `traceId`
+- [ ] Every `error`-level entry includes `code`
+- [ ] `cause` logged before `apiErrorToResponse` on `dependency` / `internal` errors
+- [ ] No PII in any log field at any level
+- [ ] No credentials, tokens, or secrets in any log field
+- [ ] No full request or response bodies logged at `info` or above
+- [ ] No stack traces in production log output (`err.message` not `err.stack`)
+- [ ] `withRequestLog` used for HTTP request logging; no manual request logging in handlers
+- [ ] `routeTemplate` is parameterised, not the resolved URL
+- [ ] Pipelines use `tap` / `tapErr` for logging; pipeline not broken for a log call
+- [ ] Tests receive `silentLogger`, not the production logger
+- [ ] Production logger emits newline-delimited JSON
+- [ ] Log level configurable via environment variable
+
+### `config`
+Full reference: `node_modules/@tsfpp/standard/spec/CONFIG_CODING_STANDARD.md`
+
+Cross-cutting — apply to entry points, config loaders, and any module that accesses configuration.
+
+- [ ] No `process.env` access outside the config loader
+- [ ] No config singleton imported by application modules
+- [ ] `loadConfig` from `@tsfpp/boundary` used in the loader
+- [ ] Loader returns `Result<Config, ConfigError>`; never throws
+- [ ] All type coercion (`string → number`, `string → boolean`) in Zod schema, not application code
+- [ ] All validation failures reported together (Zod `safeParse`, not sequential)
+- [ ] Required secrets validated for minimum length (`z.string().min(32)`)
+- [ ] `.env.example` committed; `.env` in `.gitignore`
+- [ ] Every variable in `.env.example` has an explanatory comment
+- [ ] No config values or `process.env` logged at any level
+- [ ] Tests pass plain records to the loader; never mutate `process.env`
+- [ ] Config factory in `tests/helpers/` for use-case and integration tests
+- [ ] Loader tests cover: valid, each missing required var, invalid type
+- [ ] React: `clientConfig` validated at module load; no secrets in client config
+
 ### `all`
-All focus areas above in sequence. For `.tsx` files, include `react` automatically. For files in `infrastructure/`, `dal/`, or `repository/` paths, include `data` automatically. For `*.test.ts` and `*.test.tsx` files, include `test` automatically. Include `prelude` for all files.
+All focus areas in sequence.
+
+**Always active (cross-cutting — every file, every focus):**
+`annotations`, `security`, `log`, and `config` are applied to every slice regardless of focus selection or file type.
+
+**Auto-detected by file type / path:**
+- `.tsx` files → include `react`
+- `infrastructure/`, `dal/`, `repository/` paths → include `data`
+- `*.test.ts` / `*.test.tsx` files → include `test`
+- All files → include `prelude`
 
 ---
 
@@ -431,11 +495,17 @@ Example: `docs/audits/src-domain-prelude-20260517-1430.md` or `docs/audits/src-a
 **Step 3 — Inspect slice by slice**
 For each slice:
 1. Read the file(s).
-2. Check every rule in the active focus set.
-3. Record all findings (rule · line · severity · description).
-4. Fill in the checklist.
-5. Append the completed slice section to the report.
-6. Update the slice status in the index table.
+2. Determine which checklists apply:
+   - **Always:** base checklist including the `annotations` and `security` sections — every slice, every focus
+   - React checklist for `.tsx` files under `react` or `all` focus
+   - Data checklist for files in `infrastructure/`, `dal/`, `repository/` under `data` or `all` focus
+   - Test checklist for `*.test.ts` / `*.test.tsx` under `test` or `all` focus
+   - Prelude checklist for all files under `prelude` or `all` focus
+3. Check every rule in the active focus set.
+4. Record all findings (rule · line · severity · description).
+5. Fill in the checklist.
+6. Append the completed slice section to the report.
+7. Update the slice status in the index table.
 
 **Step 4 — Summarise**
 After all slices: fill in the Summary table · set Status to ✅ Complete or ⚠️ Violations found · list the top 3 highest-priority issues.

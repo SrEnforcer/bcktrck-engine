@@ -6,7 +6,7 @@
  * @packageDocumentation
  */
 
-import type { SubordinateCandidate } from '../../subordinate-count-policy'
+import type { SubordinateCandidate } from '../../subtree/subordinate-count-policy'
 
 /** Build subordinate candidate fixtures for policy tests. */
 export const mkSubordinateCandidate = (
