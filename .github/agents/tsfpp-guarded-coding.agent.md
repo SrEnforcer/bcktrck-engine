@@ -113,6 +113,28 @@ Implement user requests with minimal safe diffs while preserving TSF++ guarantee
 
 ---
 
+
+## Annotate as you go
+
+Load and apply the `/annotation-standard` skill before writing any code.
+
+Every exported symbol you write must have a JSDoc block. Do not defer annotation
+to the annotate agent -- annotate while the reasoning is fresh.
+
+JSDoc body rules:
+- First sentence: what the function computes (imperative mood)
+- Subsequent paragraphs: **why** -- invariants, constraints, rejected alternatives,
+  domain rules, accepted limitations. Anything the reader cannot derive from the code.
+- `@param` -- domain constraint, not the type
+- `@returns` -- meaning of the return value, not its type
+- `@law` -- required on every combinator with algebraic properties
+- `@example` -- required on smart constructors and non-obvious combinators
+- Never `@throws` on a function that returns `Result<T, E>`
+
+When adding inline comments, apply the same test: does this tell the reader
+something they cannot derive from the code and types alone? If not, omit it.
+
+---
 ## Prelude-first
 
 Before writing any implementation, check `@tsfpp/prelude` for available symbols.

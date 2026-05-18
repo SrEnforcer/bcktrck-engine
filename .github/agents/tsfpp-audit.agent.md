@@ -129,17 +129,48 @@ Append each completed slice to the report:
 
 #### Checklist
 
-- [x] 1.4 — No bare `interface` (or DEVIATION documented)
-- [ ] 1.5 — No `any`
-- [x] 1.6 — No `!` assertions
-- [x] 2.x — `readonly` fields and `ReadonlyArray`
-- [x] 3.x — `const` bindings only
-- [x] 4.1 — Exhaustive `switch` with `absurd`
-- [ ] 4.5 — No truthiness checks on non-booleans
-- [x] 5.1 — Pipelines via `pipe` from prelude
-- [x] 6.x — No `throw` in core
-- [x] 7.x — JSDoc on all exports
-- [x] 9.x — No direct `ramda` import
+**Types and ADTs (§1)**
+- [ ] 1.1 — Sum types modelled as tagged discriminated union with literal discriminant
+- [ ] 1.2 — Exhaustive `switch` ends in `default: return absurd(x)`
+- [ ] 1.3 — Nominal distinctions via branded types; only smart constructors (`mk*`, `from*`, `as*`) cast with `as`
+- [ ] 1.4 — No bare `interface` (or `// DEVIATION(1.4): <reason>` present)
+- [ ] 1.5 — No `any`; `unknown` used at I/O boundaries, narrowed in scope
+- [ ] 1.6 — No `!`; no `as` outside smart constructor bodies
+- [ ] 1.8 — No `enum`; use string literal unions or `as const`
+- [ ] 1.9 — No `class` · `this` · `new` · `instanceof` · `namespace`
+- [ ] 1.11 — Prelude ADT discriminants accessed via exported guards only (`isOk`, `isSome`)
+- [ ] 1.12 — Discriminant convention: `_tag` for prelude ADTs · `kind` for domain ADTs
+
+**Immutability (§2–§3)**
+- [ ] 2.1 — `const` for every binding; no `let` / `var`
+- [ ] 2.2 — `ReadonlyArray<T>` everywhere; no mutable arrays
+- [ ] 2.3 — No mutating methods (`push`, `pop`, `splice`, `sort`, `reverse`, `fill`, `copyWithin`)
+- [ ] 2.4 — No property assignment or `delete` after construction
+- [ ] 2.5 — `as const` for literal narrowing and config tables
+- [ ] 3.x — `readonly` on every record field
+
+**Control flow (§4)**
+- [ ] 4.1 — Every sum-type `switch` is exhaustive; `default: return absurd(x)`
+- [ ] 4.5 — No truthiness checks on non-booleans (`if (str)`, `if (value)`)
+- [ ] No `for` · `while` · `do..while`; use `map`, `filter`, `reduce`, `pipe`, or traversal combinators
+
+**Pipelines and effects (§5–§6)**
+- [ ] 5.1 — Pipelines via `pipe` from `@tsfpp/prelude`
+- [ ] 6.2 — `throw` only at adapter boundaries; core uses `Result<T, E>`
+- [ ] 6.3 — No `null`/`undefined` propagation; use `Option<A>`
+- [ ] 6.6 — `Promise.allSettled` over `Promise.all` when partial failure is meaningful
+
+**Annotations (§7)**
+- [ ] 7.x — JSDoc on every exported symbol (`@param`, `@returns`; `@law` on combinators)
+
+**Boundary and imports (§8–§9)**
+- [ ] 8.4 — Parse, don't validate: `unknown` converted to domain types at the boundary
+- [ ] 9.x — No `import from 'ramda'`; use `@tsfpp/prelude`
+
+**Size limits (§11)**
+- [ ] 11.1 — One type / one responsibility per file
+- [ ] 11.2 — File ≤ 400 LOC (800 absolute max with deviation)
+- [ ] Function body ≤ 40 lines · cyclomatic complexity ≤ 10 · nesting ≤ 4 · arity ≤ 3
 
 #### Deviation register
 
@@ -153,29 +184,155 @@ Append each completed slice to the report:
 ## Focus-specific rule sets
 
 ### `types`
-1.4 (no bare interface) · 1.5 (no `any`) · 1.6 (no `!` or `as`) · 3.x (readonly) · branded types on domain primitives · smart constructor completeness · exhaustive sum-type dispatch
+Checklist:
+
+- [ ] 1.1 — Sum types are tagged discriminated unions with a literal discriminant field
+- [ ] 1.2 — Every exhaustive `switch` ends in `default: return absurd(x)`
+- [ ] 1.3 — Domain primitives use branded types; only smart constructors may cast with `as`
+- [ ] 1.4 — No bare `interface`; `type` aliases used throughout (or DEVIATION documented)
+- [ ] 1.5 — No `any`; `unknown` at I/O boundaries, narrowed before use
+- [ ] 1.6 — No `!`; no `as` outside smart constructor bodies
+- [ ] 1.8 — No `enum`; string literal unions or `as const` objects used instead
+- [ ] 1.9 — No `class` · `this` · `new` · `instanceof` · `namespace`
+- [ ] 1.11 — Prelude ADTs accessed via exported guards only (`isOk`, `isSome`, `isNone`, `isErr`)
+- [ ] 1.12 — `_tag` on prelude ADTs · `kind` on domain ADTs — no cross-contamination
+- [ ] 2.2 — `ReadonlyArray<T>` throughout; no mutable arrays
+- [ ] 3.x — Every record field is `readonly`
+- [ ] 6.3 — No `null` / `undefined` in domain types; `Option<A>` used instead
+- [ ] Smart constructors cover all valid input cases; invalid inputs return `None` or `Err`
+- [ ] No missing variant in sum-type definitions relative to the domain model
 
 ### `boundary`
-API_CODING_STANDARD.md (full) + `@tsfpp/boundary` surface:
-`extractContext` called at the top of every handler · Zod `safeParse` at every input boundary lifted via `fromZodError` ·
-all handlers return `Result<T, ApiError>` internally · `apiErrorToResponse` used for all error paths · no raw `throw` ·
-response builders (`okResponse`, `createdResponse`, `noContentResponse`, etc.) used; no hand-built `new Response()` ·
-`rateLimitHeaders` on all responses for rate-limited endpoints · `corsHeaders` never reflects `Origin` blindly ·
-`withIdempotency` + `withRequestLog` composed via `pipe` · pagination via `mkPaginated` + `parsePaginationQuery` ·
-LRO via `acceptedResponse` + `mkRunningOp`/`mkSucceededOp` · bulk via `bulkResponse` + `mkBulkOkItem`/`mkBulkErrorItem` ·
-handler architecture: parse → domain map → use-case → response map (nothing else)
+Full reference: `node_modules/@tsfpp/standard/spec/API_CODING_STANDARD.md`
+
+**Request handling**
+- [ ] `extractContext(req, routeTemplate)` called first in every handler
+- [ ] `routeTemplate` is the parameterised path (`/v1/tracks/:id`), never the resolved URL
+- [ ] All input validated with Zod `safeParse` at the boundary; never `parse` (throws)
+- [ ] `fromZodError(zodError)` used to lift Zod errors into `ValidationError`
+- [ ] No unvalidated `req.json()` passed into domain or use-case code
+
+**Error handling**
+- [ ] `apiErrorToResponse(error, ctx)` used for all error paths; no manual `new Response()`
+- [ ] `dependency` and `internal` `ApiError` variants: `cause` logged before calling mapper
+- [ ] No raw `throw` in handlers; all errors returned as `Result<T, ApiError>`
+- [ ] `fromZodError` used, not manual `ValidationError` construction for Zod errors
+
+**Response builders**
+- [ ] `okResponse` / `createdResponse` / `noContentResponse` / `acceptedResponse` used — no `new Response()`
+- [ ] `createdResponse` sets `Location` header with the resource URL
+- [ ] `acceptedResponse` used for async / LRO operations; polling URL provided
+- [ ] `bulkResponse` + `mkBulkOkItem` / `mkBulkErrorItem` for batch endpoints
+
+**Handler architecture**
+- [ ] Handler shape: parse → domain map → use-case → response map (nothing else)
+- [ ] No domain logic or business rules in handler body
+- [ ] No direct DB or infrastructure access in handler body
+
+**Security headers**
+- [ ] `baselineSecurityHeaders` merged into every response
+- [ ] `corsHeaders` used; never reflects `Origin` blindly; `allowedOrigins` from config
+- [ ] `rateLimitHeaders` attached to all responses on rate-limited endpoints, not just 429s
+
+**Middleware**
+- [ ] Middleware composed via `pipe`, outermost-last
+- [ ] `withRequestLog` is always the outermost wrapper
+- [ ] `withIdempotency` present on all state-mutating operations
+
+**Pagination**
+- [ ] `parsePaginationQuery` used; result checked for `Err` before use
+- [ ] `mkPaginated` used; `totalCount` is `null` unless precomputed
+- [ ] `encodeCursor` / `decodeCursor` used; no hand-rolled base64
 
 ### `complexity`
-Function body ≤ 40 lines · cyclomatic complexity ≤ 10 · nesting ≤ 4 · arity ≤ 3 positional params · pipeline depth ≤ 8 stages
+Checklist:
+
+- [ ] Function body ≤ 40 lines (excluding blank lines and comments)
+- [ ] Cyclomatic complexity ≤ 10 per function
+- [ ] Nesting depth ≤ 4 (ternaries, callbacks, and blocks combined)
+- [ ] Positional arity ≤ 3; ≥ 3 parameters use a readonly record
+- [ ] Pipeline depth ≤ 8 stages in a single `pipe` call
+- [ ] File ≤ 400 LOC; 800 absolute maximum (requires DEVIATION)
+- [ ] No god-module (one file handling multiple unrelated concerns)
+- [ ] No function doing more than one named thing (single responsibility)
 
 ### `loc`
-File LOC · function LOC · god-module candidates · decomposition opportunities
+Checklist:
+
+- [ ] File LOC ≤ 400 (flag at 300; hard limit 800 with DEVIATION)
+- [ ] Function body ≤ 40 lines
+- [ ] No file with more than one primary exported concern (god-module)
+- [ ] No function longer than 40 lines that could be decomposed
+- [ ] No deeply nested anonymous functions or callbacks (extract and name them)
+- [ ] Test files excluded from LOC limits but flagged if > 600 lines
 
 ### `annotations`
-JSDoc on every export · `@param` + `@returns` present · `@law` on combinators · DEVIATION comments formatted correctly · TODO/HACK/FIXME/NOTE/OPTIMIZE/BUG/XXX have date + author + ticket
+Full reference: `node_modules/@tsfpp/standard/spec/ANNOTATION_CODING_STANDARD.md`
 
+**Module headers (SS1)**
+- [ ] Every file with public exports has a module-level JSDoc block
+- [ ] Module header describes the contract, not the implementation
+- [ ] `@packageDocumentation` present
+
+**JSDoc on exported symbols (SS2)**
+- [ ] Every exported function, const, type has a JSDoc block
+- [ ] First sentence states purpose in imperative mood
+- [ ] JSDoc body explains the **why** -- not a paraphrase of the code
+- [ ] `@param` describes domain constraint, not the type
+- [ ] `@returns` describes meaning of the value, not its type
+- [ ] `@law` present on every combinator with algebraic properties
+- [ ] `@example` present on smart constructors and non-obvious combinators
+- [ ] `@deprecated` includes replacement and version number where present
+- [ ] No `@throws` on functions that return `Result<T, E>`
+
+**Inline comments (SS3)**
+- [ ] No comments that paraphrase the code
+- [ ] No commented-out code
+- [ ] No section dividers or decorative separators
+- [ ] Rejected alternatives documented where a reader would naturally question the choice
+- [ ] Non-obvious invariants and external contracts documented
+- [ ] Known limitations explicitly marked as intentional
+- [ ] Performance trade-offs with scale thresholds documented where present
+
+**Code markers (SS4)**
+- [ ] All markers follow `// MARKER(author, YYYY-MM-DD[, TICKET]): description` exactly
+- [ ] No marker missing author or date
+- [ ] All `HACK` markers have a ticket and a revisit condition
+- [ ] No `BUG` marker without a conversion plan
+- [ ] No stale marker surviving more than one release cycle without a ticket
+
+**Deviations (SS5)**
+- [ ] Every rule violation has `// DEVIATION(N.M): <justification>` immediately before the offending line
+- [ ] Justification explains why no alternative was feasible -- not what the violation is
+- [ ] Format is exact: `DEVIATION(N.M)` -- not `deviation`, not `Deviation`, not `DEVIATION N.M`
+- [ ] Every bare `eslint-disable` is paired with a DEVIATION comment above it
+- [ ] Project-wide deviations are documented in `DEVIATIONS.md`
 ### `security`
-SECURITY_CODING_STANDARD.md: input validation at boundaries · no secrets in code · no sensitive data in errors · auth/authz at correct layer · dependency hygiene
+Full reference: `node_modules/@tsfpp/standard/spec/SECURITY_CODING_STANDARD.md`
+
+**Input validation**
+- [ ] All external input validated at the boundary before entering the domain
+- [ ] No `unknown` values passed into domain functions without prior narrowing
+- [ ] Dynamic sort/filter fields allow-listed before use in queries
+
+**Secrets and sensitive data**
+- [ ] No secrets, credentials, or tokens in source code or committed config files
+- [ ] No sensitive data (PII, credentials, tokens) in error messages or log output
+- [ ] No sensitive data in `console.log` or structured log `info` entries
+
+**Authentication and authorisation**
+- [ ] Auth/authz enforced at the correct layer (handler / middleware), not inside use-cases
+- [ ] No route accessible without authentication unless explicitly marked `// PUBLIC`
+- [ ] Principal ID never trusted from request body; always extracted from verified context
+
+**Dependencies**
+- [ ] No known vulnerable dependencies (`pnpm audit` clean)
+- [ ] No direct use of `eval`, `Function()`, or dynamic `import()` with user-controlled input
+
+**Output safety**
+- [ ] No user input reflected in error responses without sanitisation
+- [ ] CORS: `allowedOrigins` from config; never reflects `Origin` header blindly
+- [ ] `baselineSecurityHeaders` applied to every response
 
 ### `prelude`
 Cross-cutting — applies to all layers. Check for hand-rolled patterns that `@tsfpp/prelude` already provides.

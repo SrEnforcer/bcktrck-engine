@@ -36,6 +36,13 @@ Full coding standard: `node_modules/@tsfpp/standard/spec/CODING_STANDARD.md`
 
 ---
 
+## Before writing any test
+
+Load and apply the `/test-standard` skill. Every test you write must conform to
+all rules in that skill. Do not write a single test before the skill is loaded.
+
+---
+
 ## Session start
 
 Infer the layer per task from the user's message:
@@ -153,6 +160,36 @@ All rules from `TEST_CODING_STANDARD.md` apply. The most critical during test au
 
 ---
 
+## Factories
+
+Always use typed factory functions from `tests/factories/` for test data.
+Never write raw object literals inline.
+
+```ts
+// tests/factories/track.factory.ts
+const makeTrack = (overrides: Partial<Track> = {}): Track => ({
+  id:       mkTrackId('test-track-001'),
+  title:    'Default Title',
+  artistId: mkArtistId('test-artist-001'),
+  ...overrides,
+})
+```
+
+Import and use with overrides for the specific case under test:
+
+```ts
+// Specific case — override only what matters for this test
+const track = makeTrack({ title: 'Blue Flame' })
+
+// Default case — the specific values don't matter
+const track = makeTrack()
+```
+
+Never hard-code raw objects like `{ id: 'abc', title: 'Test', artistId: 'xyz' }` in test bodies.
+Never use production or staging IDs in fixtures.
+
+---
+
 ## Layer-specific test patterns
 
 ### `core`
@@ -164,14 +201,21 @@ import { isSome, isNone, isOk, isErr } from '@tsfpp/prelude'
 describe('mkTrackId', () => {
   describe('when the input is a non-empty string', () => {
     it('returns Some containing a branded TrackId', () => {
-      const result = mkTrackId('abc')
+      const raw = 'abc'
+
+      const result = mkTrackId(raw)
+
       expect(isSome(result)).toBe(true)
     })
   })
 
   describe('when the input is empty', () => {
     it('returns None', () => {
-      expect(mkTrackId('')).toEqual(none)
+      const raw = ''
+
+      const result = mkTrackId(raw)
+
+      expect(result).toEqual(none)
     })
   })
 
@@ -200,11 +244,13 @@ describe('POST /v1/tracks', () => {
   describe('when the request body is valid', () => {
     it('responds with 201 and a Location header', async () => {
       const req = new Request('http://localhost/v1/tracks', {
-        method: 'POST',
-        body: JSON.stringify({ title: 'Test', artistId: 'a1' }),
+        method:  'POST',
+        body:    JSON.stringify({ title: 'Test', artistId: 'a1' }),
         headers: { 'Content-Type': 'application/json' },
       })
+
       const res = await handler(req)
+
       expect(res.status).toBe(201)
       expect(res.headers.get('Location')).toMatch(/\/v1\/tracks\//)
     })
@@ -212,12 +258,16 @@ describe('POST /v1/tracks', () => {
 
   describe('when title is missing', () => {
     it('responds with 422', async () => {
+      const input = makeCreateTrackInput({ title: undefined })  // override to trigger validation failure
+
       const req = new Request('http://localhost/v1/tracks', {
-        method: 'POST',
-        body: JSON.stringify({ artistId: 'a1' }),
+        method:  'POST',
+        body:    JSON.stringify(input),
         headers: { 'Content-Type': 'application/json' },
       })
+
       const res = await handler(req)
+
       expect(res.status).toBe(422)
     })
   })
@@ -266,7 +316,9 @@ describe('TrackRepository', () => {
       it('returns Some containing the track', async () => {
         const track = makeTrack()
         await repo.save(track)
+
         const result = await repo.findById(track.id)
+
         expect(isSome(result)).toBe(true)
       })
     })
@@ -274,6 +326,7 @@ describe('TrackRepository', () => {
     describe('when the track does not exist', () => {
       it('returns None', async () => {
         const result = await repo.findById(mkTrackId('nonexistent'))
+
         expect(isNone(result)).toBe(true)  // will fail — findById not implemented
       })
     })

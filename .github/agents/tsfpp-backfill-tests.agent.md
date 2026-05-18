@@ -41,6 +41,13 @@ Full coding standard: `node_modules/@tsfpp/standard/spec/CODING_STANDARD.md`
 
 ---
 
+## Before writing any test
+
+Load and apply the `/test-standard` skill. Every test you write must conform to
+all rules in that skill. Do not write a single test before the skill is loaded.
+
+---
+
 ## Session start
 
 Infer the layer per file from the path and contents:
@@ -163,6 +170,36 @@ All rules from `TEST_CODING_STANDARD.md` apply:
 
 ---
 
+## Factories
+
+Always use typed factory functions from `tests/factories/` for test data.
+Never write raw object literals inline.
+
+```ts
+// tests/factories/track.factory.ts
+const makeTrack = (overrides: Partial<Track> = {}): Track => ({
+  id:       mkTrackId('test-track-001'),
+  title:    'Default Title',
+  artistId: mkArtistId('test-artist-001'),
+  ...overrides,
+})
+```
+
+Import and use with overrides for the specific case under test:
+
+```ts
+// Specific case — override only what matters for this test
+const track = makeTrack({ title: 'Blue Flame' })
+
+// Default case — the specific values don't matter
+const track = makeTrack()
+```
+
+Never hard-code raw objects like `{ id: 'abc', title: 'Test', artistId: 'xyz' }` in test bodies.
+Never use production or staging IDs in fixtures.
+
+---
+
 ## Layer-specific patterns
 
 ### `core`
@@ -199,9 +236,11 @@ describe('mkTrackId', () => {
 
 ```ts
 it('responds with 201 and a Location header on valid input', async () => {
+  const input = makeCreateTrackInput()  // from tests/factories/track.factory.ts
+
   const req = new Request('http://localhost/v1/tracks', {
     method:  'POST',
-    body:    JSON.stringify({ title: 'Test', artistId: 'a1' }),
+    body:    JSON.stringify(input),
     headers: { 'Content-Type': 'application/json' },
   })
 

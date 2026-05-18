@@ -16,8 +16,8 @@ importers:
         version: 1.16.0
     devDependencies:
       '@tsfpp/agents':
-        specifier: ^1.3.3
-        version: 1.3.3(@tsfpp/boundary@1.0.1)(@tsfpp/eslint-config@1.0.1(@typescript-eslint/eslint-plugin@8.59.3(@typescript-eslint/parser@8.59.3(eslint@10.4.0(jiti@2.6.1))(typescript@6.0.3))(eslint@10.4.0(jiti@2.6.1))(typescript@6.0.3))(@typescript-eslint/parser@8.59.3(eslint@10.4.0(jiti@2.6.1))(typescript@6.0.3))(eslint-plugin-functional@9.0.4(eslint@10.4.0(jiti@2.6.1))(typescript@6.0.3))(eslint@10.4.0(jiti@2.6.1))(typescript@6.0.3))(@tsfpp/prelude@1.4.1)(@tsfpp/standard@1.1.0)(@tsfpp/tsconfig@1.0.0(typescript@6.0.3))
+        specifier: ^1.4.0
+        version: 1.4.0(@tsfpp/boundary@1.0.1)(@tsfpp/eslint-config@1.0.1(@typescript-eslint/eslint-plugin@8.59.3(@typescript-eslint/parser@8.59.3(eslint@10.4.0(jiti@2.6.1))(typescript@6.0.3))(eslint@10.4.0(jiti@2.6.1))(typescript@6.0.3))(@typescript-eslint/parser@8.59.3(eslint@10.4.0(jiti@2.6.1))(typescript@6.0.3))(eslint-plugin-functional@9.0.4(eslint@10.4.0(jiti@2.6.1))(typescript@6.0.3))(eslint@10.4.0(jiti@2.6.1))(typescript@6.0.3))(@tsfpp/prelude@1.4.1)(@tsfpp/standard@1.2.0)(@tsfpp/tsconfig@1.0.0(typescript@6.0.3))
       '@tsfpp/boundary':
         specifier: ^1.0.1
         version: 1.0.1
@@ -25,8 +25,8 @@ importers:
         specifier: ^1.0.1
         version: 1.0.1(@typescript-eslint/eslint-plugin@8.59.3(@typescript-eslint/parser@8.59.3(eslint@10.4.0(jiti@2.6.1))(typescript@6.0.3))(eslint@10.4.0(jiti@2.6.1))(typescript@6.0.3))(@typescript-eslint/parser@8.59.3(eslint@10.4.0(jiti@2.6.1))(typescript@6.0.3))(eslint-plugin-functional@9.0.4(eslint@10.4.0(jiti@2.6.1))(typescript@6.0.3))(eslint@10.4.0(jiti@2.6.1))(typescript@6.0.3)
       '@tsfpp/standard':
-        specifier: ^1.1.0
-        version: 1.1.0
+        specifier: ^1.2.0
+        version: 1.2.0
       '@tsfpp/tsconfig':
         specifier: ^1.0.0
         version: 1.0.0(typescript@6.0.3)
@@ -317,8 +317,8 @@ packages:
   '@standard-schema/spec@1.1.0':
     resolution: {integrity: sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w==}
 
-  '@tsfpp/agents@1.3.3':
-    resolution: {integrity: sha512-BSIyuhzyR9XHQvqwsVIH1txRTbmyXacFEigpO4uh47mPP3goKI7hhXFMc7AR6/VBvJZjRVLUoB2eS1Is6jcvew==}
+  '@tsfpp/agents@1.4.0':
+    resolution: {integrity: sha512-pzvn2/HSkiCoxBLYFPlDATZgLgl9lJi2GjGxrDtSjv2er3VkpFlBnz/2AjfGw4yqSM/VKcgDQi8+n5M8Xd9Y/w==}
     engines: {node: '>=18.0.0'}
     hasBin: true
     peerDependencies:
@@ -363,8 +363,8 @@ packages:
     resolution: {integrity: sha512-B+qzK8qIFMGrxpmzhnQ6yYOohluSDe6DvsJgZXbyaZVqiY44yH6OkVdo2kMyuLT2lZTXccbshdBa7s4EgtpAdg==}
     engines: {node: '>=18.0.0'}
 
-  '@tsfpp/standard@1.1.0':
-    resolution: {integrity: sha512-lYsZN+mAeMlC19dADZLz5lKzTgPcsKW5Q/0YwIknF3iuotueYOmsjnf5ZwUcZP/aIDxFXdvSyCeWWWcHHvZv0g==}
+  '@tsfpp/standard@1.2.0':
+    resolution: {integrity: sha512-cK4hgFyzp3X24BLVEDxAvXvf0SIZ76gScrYEqiOwOOtvSAHZ2yOpplAU9Z5IhMY6s/FtTA92S3UPtARoi1UTlQ==}
 
   '@tsfpp/tsconfig@1.0.0':
     resolution: {integrity: sha512-LJ3sLHDpJv08SQoC7SQRTNwCDHzWa0kju4XymkssJppIPahAZazCs5kS40U+fz1p8rUiLmvtangUQnvQf/X41g==}
@@ -1479,12 +1479,12 @@ snapshots:
 
   '@standard-schema/spec@1.1.0': {}
 
-  '@tsfpp/agents@1.3.3(@tsfpp/boundary@1.0.1)(@tsfpp/eslint-config@1.0.1(@typescript-eslint/eslint-plugin@8.59.3(@typescript-eslint/parser@8.59.3(eslint@10.4.0(jiti@2.6.1))(typescript@6.0.3))(eslint@10.4.0(jiti@2.6.1))(typescript@6.0.3))(@typescript-eslint/parser@8.59.3(eslint@10.4.0(jiti@2.6.1))(typescript@6.0.3))(eslint-plugin-functional@9.0.4(eslint@10.4.0(jiti@2.6.1))(typescript@6.0.3))(eslint@10.4.0(jiti@2.6.1))(typescript@6.0.3))(@tsfpp/prelude@1.4.1)(@tsfpp/standard@1.1.0)(@tsfpp/tsconfig@1.0.0(typescript@6.0.3))':
+  '@tsfpp/agents@1.4.0(@tsfpp/boundary@1.0.1)(@tsfpp/eslint-config@1.0.1(@typescript-eslint/eslint-plugin@8.59.3(@typescript-eslint/parser@8.59.3(eslint@10.4.0(jiti@2.6.1))(typescript@6.0.3))(eslint@10.4.0(jiti@2.6.1))(typescript@6.0.3))(@typescript-eslint/parser@8.59.3(eslint@10.4.0(jiti@2.6.1))(typescript@6.0.3))(eslint-plugin-functional@9.0.4(eslint@10.4.0(jiti@2.6.1))(typescript@6.0.3))(eslint@10.4.0(jiti@2.6.1))(typescript@6.0.3))(@tsfpp/prelude@1.4.1)(@tsfpp/standard@1.2.0)(@tsfpp/tsconfig@1.0.0(typescript@6.0.3))':
     dependencies:
       '@tsfpp/boundary': 1.0.1
       '@tsfpp/eslint-config': 1.0.1(@typescript-eslint/eslint-plugin@8.59.3(@typescript-eslint/parser@8.59.3(eslint@10.4.0(jiti@2.6.1))(typescript@6.0.3))(eslint@10.4.0(jiti@2.6.1))(typescript@6.0.3))(@typescript-eslint/parser@8.59.3(eslint@10.4.0(jiti@2.6.1))(typescript@6.0.3))(eslint-plugin-functional@9.0.4(eslint@10.4.0(jiti@2.6.1))(typescript@6.0.3))(eslint@10.4.0(jiti@2.6.1))(typescript@6.0.3)
       '@tsfpp/prelude': 1.4.1
-      '@tsfpp/standard': 1.1.0
+      '@tsfpp/standard': 1.2.0
       '@tsfpp/tsconfig': 1.0.0(typescript@6.0.3)
 
   '@tsfpp/boundary@1.0.1':
@@ -1503,7 +1503,7 @@ snapshots:
 
   '@tsfpp/prelude@1.4.1': {}
 
-  '@tsfpp/standard@1.1.0': {}
+  '@tsfpp/standard@1.2.0': {}
 
   '@tsfpp/tsconfig@1.0.0(typescript@6.0.3)':
     dependencies:
