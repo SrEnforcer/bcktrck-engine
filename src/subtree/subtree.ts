@@ -103,6 +103,51 @@ const uniqueInOrder = (values: readonly string[]): readonly string[] =>
 const pruneDescendantSelections = (ids: readonly string[], parentMap: ReadonlyMap<string, string>): readonly string[] =>
   ids.filter((id) => !ids.some((candidate) => candidate !== id && isAncestor(candidate, id, parentMap)))
 
+const sharedDirectParentId = (
+  selectedRoots: readonly OrgNode[],
+  parentMap: ReadonlyMap<string, string>
+): string | undefined => {
+  if (selectedRoots.length <= 1) {
+    return undefined
+  }
+
+  const directParentIds = selectedRoots
+    .map((node) => fromNullable(parentMap.get(rawId(node.id))))
+
+  if (directParentIds.some((parentIdOption) => isNone(parentIdOption))) {
+    return undefined
+  }
+
+  const normalizedIds = directParentIds.map((parentIdOption) => getOrElse<string>(() => '')(parentIdOption))
+  const firstOption = fromNullable(normalizedIds[0])
+  if (isNone(firstOption)) {
+    return undefined
+  }
+
+  return normalizedIds.every((id) => id === firstOption.value) ? firstOption.value : undefined
+}
+
+const withSelectedChildren = (parent: OrgNode, selectedRoots: readonly OrgNode[]): OrgNode => {
+  if (parent.kind === 'department') {
+    return {
+      ...parent,
+      members: selectedRoots
+    }
+  }
+
+  if (parent.kind === 'vacancy') {
+    return {
+      ...parent,
+      children: selectedRoots
+    }
+  }
+
+  return {
+    ...parent,
+    children: selectedRoots
+  }
+}
+
 const filterShadowNodes = (tree: OrgTree, ids: ReadonlySet<string>): OrgTree['shadowNodes'] =>
   tree.shadowNodes
     .filter((s) => ids.has(rawId(s.id)))
@@ -233,6 +278,78 @@ const collectEntries = (node: OrgNode, depth: number): readonly SubtreeEntry[] =
   return [entry, ...children.flatMap((c) => collectEntries(c, depth + 1))]
 }
 
+const cloneAsPathNode = (node: OrgNode): OrgNode => {
+  if (node.kind === 'department') {
+    return {
+      ...node,
+      members: []
+    }
+  }
+
+  if (node.kind === 'vacancy') {
+    return {
+      ...node,
+      children: []
+    }
+  }
+
+  return {
+    ...node,
+    children: [],
+    staff: []
+  }
+}
+
+const withPathChild = (parent: OrgNode, child: OrgNode): OrgNode => {
+  if (parent.kind === 'department') {
+    return {
+      ...parent,
+      members: [child]
+    }
+  }
+
+  if (parent.kind === 'vacancy') {
+    return {
+      ...parent,
+      children: [child]
+    }
+  }
+
+  return {
+    ...parent,
+    children: [child],
+    staff: []
+  }
+}
+
+const buildUpstreamPathRoot = (nodes: readonly OrgNode[]): Option<OrgNode> => {
+  const headOption = fromNullable(nodes[0])
+  if (isNone(headOption)) {
+    return none
+  }
+
+  const head = cloneAsPathNode(headOption.value)
+  const tailOption = fromNullable(nodes[1])
+  if (isNone(tailOption)) {
+    return some(head)
+  }
+
+  const tailRootOption = buildUpstreamPathRoot(nodes.slice(1))
+  return isNone(tailRootOption)
+    ? some(head)
+    : some(withPathChild(head, tailRootOption.value))
+}
+
+const upwardPathIds = (
+  startId: string,
+  parentMap: ReadonlyMap<string, string>
+): readonly string[] => {
+  const parentIdOption = fromNullable(parentMap.get(startId))
+  return isNone(parentIdOption)
+    ? [startId]
+    : [startId, ...upwardPathIds(parentIdOption.value, parentMap)]
+}
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -278,6 +395,44 @@ export const isolateSubtree = (tree: OrgTree, id: string): Option<OrgTree> => {
 }
 
 /**
+ * Extract an upstream managerial path from the target node to the tree root.
+ *
+ * The resulting tree contains exactly one root-to-target branch, preserving
+ * original node kinds and metadata while removing sibling branches.
+ *
+ * @param tree The full resolved org tree.
+ * @param id Raw node id from `SubtreeEntry.id`.
+ * @returns The isolated upstream path as `Option<OrgTree>` — `none` when `id` is not found.
+ */
+export const isolateUpstreamSubtree = (tree: OrgTree, id: string): Option<OrgTree> => {
+  const targetOption = fromNullable(findNodeById(tree.root, id))
+  if (isNone(targetOption)) {
+    return none
+  }
+
+  const parentMap = collectParentMap(tree.root)
+  const pathIds = upwardPathIds(rawId(targetOption.value.id), parentMap)
+  const rootToTargetIds = pathIds.slice().reverse()
+
+  const pathNodes = rootToTargetIds
+    .map((pathId) => findNodeById(tree.root, pathId))
+    .filter((node): node is OrgNode => !isNone(fromNullable(node)))
+
+  const pathRootOption = buildUpstreamPathRoot(pathNodes)
+  if (isNone(pathRootOption)) {
+    return none
+  }
+
+  const includedIds = collectNodeIds(pathRootOption.value)
+
+  return some({
+    root: pathRootOption.value,
+    dottedEdges: tree.dottedEdges.filter((e) => includedIds.has(rawId(e.from)) && includedIds.has(rawId(e.to))),
+    shadowNodes: filterShadowNodes(tree, includedIds)
+  })
+}
+
+/**
  * Extract a union of multiple selected subtree roots.
  *
  * Unknown ids are ignored as long as at least one valid id remains.
@@ -310,12 +465,23 @@ export const isolateSubtrees = (tree: OrgTree, ids: readonly string[]): Option<O
     .map((id) => findNodeById(tree.root, id))
     .filter(isSomeNode)
 
-  const includedIds = intoSet(
-    selectedRoots.flatMap((node) => [...collectNodeIds(node)])
-  )
+  const sharedParentIdOption = fromNullable(sharedDirectParentId(selectedRoots, parentMap))
+  const sharedParentOption = isNone(sharedParentIdOption)
+    ? none
+    : fromNullable(findNodeById(tree.root, sharedParentIdOption.value))
+
+  const rootNode = isNone(sharedParentIdOption)
+    ? buildForestRoot(tree, selectedRoots)
+    : getOrElse<OrgNode>(() => buildForestRoot(tree, selectedRoots))(sharedParentOption)
+
+  const adjustedRootNode = isNone(sharedParentOption)
+    ? rootNode
+    : withSelectedChildren(sharedParentOption.value, selectedRoots)
+
+  const includedIds = collectNodeIds(adjustedRootNode)
 
   return some({
-    root: buildForestRoot(tree, selectedRoots),
+    root: adjustedRootNode,
     dottedEdges: tree.dottedEdges.filter((e) => includedIds.has(rawId(e.from)) && includedIds.has(rawId(e.to))),
     shadowNodes: filterShadowNodes(tree, includedIds)
   })

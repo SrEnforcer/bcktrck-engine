@@ -27,7 +27,7 @@ export type { EdgeRoute, EdgeRoutePoint, IndexedNode, IndexedTree, LayoutNodeKin
 export { computeReportingChain, computeVerticalPath, computeAltChain } from './subtree/reporting-chain'
 /** Re-export reporting-chain output types. */
 export type { ReportingChain, VerticalPath, AltChain } from './subtree/reporting-chain'
-export { listSubtrees, isolateSubtree, isolateSubtrees } from './subtree/subtree'
+export { listSubtrees, isolateSubtree, isolateSubtrees, isolateUpstreamSubtree } from './subtree/subtree'
 /** Re-export subtree listing DTOs for selector UIs. */
 export type { SubtreeEntry } from './subtree/subtree'
 export { spanOfControl, defaultSpanOfControlOptions } from './subtree/span-of-control'
