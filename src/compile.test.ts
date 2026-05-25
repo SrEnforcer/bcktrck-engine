@@ -1,3 +1,4 @@
+import { fromNullable, getOrElse } from '@tsfpp/prelude'
 import { describe, expect, it } from 'vitest'
 import { compile, listSubtreesFromSource } from './compile'
 
@@ -40,8 +41,9 @@ describe('compile when style resolution fails', () => {
     const source = ['style', '  @missing', '    color: #f00', ...validSource.split('\n')].join('\n')
 
     const result = requireCompileError(compile(source))
+    const resolveErrorCount = getOrElse<number>(() => 0)(fromNullable(result.resolveErrors?.length))
 
-    expect((result.resolveErrors?.length ?? 0) > 0).toBe(true)
+    expect(resolveErrorCount > 0).toBe(true)
     expect(result.resolveErrors?.[0]?.kind).toBe('invalid_attr_value')
   })
 })
