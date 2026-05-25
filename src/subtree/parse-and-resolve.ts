@@ -26,9 +26,6 @@ type ParseAndResolveOptions = {
  * Parse BTL source text and resolve to an organizational tree.
  *
  * @param source Raw BTL text
- * @param options Optional variable bindings injected before semantic resolution.
- * @returns A discriminated union: `{ ok: true, ast, tree }` on success,
- *          or `{ ok: false, parseError?, resolveErrors? }` on failure.
  * @param options Optional variable bindings and variable-icon bindings injected before semantic resolution.
  * @returns A discriminated union: `{ ok: true, ast, tree }` on success,
  *          or `{ ok: false, parseError?, resolveErrors? }` on failure.

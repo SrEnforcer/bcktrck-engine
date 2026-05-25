@@ -1,4 +1,4 @@
-import { intoMap, intoSet } from '@tsfpp/prelude'
+import { intoMap, intoSet, none, some } from '@tsfpp/prelude'
 import { describe, expect, it } from 'vitest'
 import type { ResolvedStyleMap } from '../../style/dsl'
 import type { EdgeRoute, IndexedTree, PlacedTree, PlacedStaff, RenderConfig } from '../types'
@@ -32,8 +32,8 @@ const cfg: RenderConfig = {
 const tree: IndexedTree = {
   rootId: 'root',
   nodes: intoMap([
-    ['root', { id: 'root', kind: 'employee', label: 'Root', depth: 0, parentId: null, childIndex: 0, children: ['child'], staffLeft: ['staff-l'], staffRight: ['staff-r'] }],
-    ['child', { id: 'child', kind: 'employee', label: 'Child', depth: 1, parentId: 'root', childIndex: 0, children: [], staffLeft: [], staffRight: [] }]
+    ['root', { id: 'root', kind: 'employee', label: 'Root', depth: 0, parentId: none, childIndex: 0, children: ['child'], staffLeft: ['staff-l'], staffRight: ['staff-r'] }],
+    ['child', { id: 'child', kind: 'employee', label: 'Child', depth: 1, parentId: some('root'), childIndex: 0, children: [], staffLeft: [], staffRight: [] }]
   ])
 }
 

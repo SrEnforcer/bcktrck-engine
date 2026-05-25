@@ -1,0 +1,7 @@
+name: config-standard
+description: >
+  Normative TSF++ configuration management rules. Load when writing or reviewing
+  any code that loads environment variables, defines a Config type, calls
+  loadConfig, accesses process.env, implements a config loader, or writes
+  .env.example: loadConfig from @tsfpp/boundary, Config as typed readonly record,
+  Zod validation at the startup boundary, injection pattern, test factories.

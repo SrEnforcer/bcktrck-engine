@@ -7,6 +7,8 @@
  * @packageDocumentation
  */
 
+import type { Option } from '@tsfpp/prelude'
+
 /** Distinguishes the semantic role of a node in the layout tree. */
 export type LayoutNodeKind = 'employee' | 'department' | 'vacancy'
 
@@ -24,7 +26,7 @@ export type IndexedNode = {
   readonly layoutHint?: 'hanging' | 'hanging-left' | 'hanging-right' | 'hanging-both' | 'multirow' | 'compact' | 'wide' | 'flat' | 'expand'
   readonly hangingSide?: 'left' | 'right'
   readonly depth: number
-  readonly parentId: string | null
+  readonly parentId: Option<string>
   /** 0-based position among the parent's regular `children`. */
   readonly childIndex: number
   /** Ordered ids of regular (non-staff) children. */

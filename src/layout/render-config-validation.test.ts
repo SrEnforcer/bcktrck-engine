@@ -33,7 +33,7 @@ const validConfig = (): RenderConfig => ({
 })
 
 describe('validateRenderConfig when all fields are valid', () => {
-  it('returns ok true', () => {
+  it('accepts a fully valid render configuration', () => {
     const result = validateRenderConfig(validConfig())
 
     expect(result).toEqual({ ok: true })

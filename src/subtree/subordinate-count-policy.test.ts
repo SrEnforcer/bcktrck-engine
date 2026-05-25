@@ -4,7 +4,7 @@ import { countDirectSubordinates, isCountedDirectSubordinate, type SubordinateCa
 import { mkSubordinateCandidate } from '../tests/factories/subordinate'
 
 describe('isCountedDirectSubordinate when the candidate is a department', () => {
-  it('returns false', () => {
+  it('excludes department candidates from direct subordinate counts', () => {
     const candidate = mkSubordinateCandidate({ kind: 'department', isShadow: false })
     const policy: SubordinateCountPolicy = { includeShadows: true, includeVacancies: true }
 

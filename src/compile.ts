@@ -20,15 +20,19 @@
 import type { Option } from '@tsfpp/prelude'
 import { fromNullable, getOrElse, intoMap, isNone, isSome, none, some } from '@tsfpp/prelude'
 import { parseAndResolveBtl } from './subtree/parse-and-resolve'
-import { isolateSubtree, isolateSubtrees, listSubtrees } from './subtree/subtree'
+import { parseBtl } from './parser/parse'
+import { isolateSubtree, isolateSubtrees, isolateUpstreamSubtree, listSubtrees } from './subtree/subtree'
+import { buildHandleMap } from './resolver/handles'
 import { indexTree } from './layout/index-tree'
 import { buchheim } from './layout/buchheim'
 import { applyLayoutHints } from './layout/apply-layout-hints'
 import { placeStaff } from './layout/staff-placement'
 import { routeEdgesWithDiagnostics } from './layout/route-edges'
 import { renderSvg, defaultRenderConfig } from './layout/render-svg'
-import { applyDefinitionsToStyleSheet, extractDefinitionsBlock, extractStyleSheet, mergeStyleSheets, resolveStyleSheet } from './style/dsl'
+import { applyDefinitionsToStyleSheet, mergeStyleSheets, resolveStyleSheet } from './style/dsl'
+import { buildCompileStyleContext, extractSourceStyle, parseSupplementalStyleSource, type CompileStyleContext } from './compile/style-context'
 import type { RenderConfig, RenderError, RenderedSvg } from './layout/types'
+import type { AstNode } from './types/ast'
 import type { ParseErr, ResolveError } from './types/results'
 import type { OrgNode, OrgTree } from './types/org-tree'
 import type { IconSpec } from './icons/render'
@@ -104,6 +108,11 @@ export type CompileOptions = {
    * Unknown ids are ignored as long as at least one id exists in the tree.
    */
   readonly subtreeIds?: readonly string[]
+  /**
+   * When set, renders only the upstream managerial chain from this node to root.
+   * Unknown ids fail with an `unknown_handle` resolve error.
+   */
+  readonly upstreamId?: string
 }
 
 const mergeOptionalStyleSource = (
@@ -121,6 +130,54 @@ const mergeOptionalStyleSource = (
   }
 
   return some(mergeStyleSheets(base, supplementalStyleSheet.styleSheet))
+}
+
+const astNodeToSubtreeKind = (kind: AstNode['kind']): SubtreeEntry['kind'] => {
+  if (kind === 'dept') {
+    return 'department'
+  }
+
+  if (kind === 'vacant') {
+    return 'vacancy'
+  }
+
+  return 'employee'
+}
+
+const isStaffAstNode = (node: AstNode): boolean => node.kind === 'staff'
+
+const astSubtrees = (
+  node: AstNode,
+  depth: number,
+  nodeToHandle: ReadonlyMap<AstNode, string>
+): readonly SubtreeEntry[] => {
+  if (isStaffAstNode(node)) {
+    return []
+  }
+
+  const resolvedHandleOption = fromNullable(nodeToHandle.get(node))
+  const displayNameOption = fromNullable(node.displayName)
+  const label = getOrElse<string>(() => getOrElse<string>(() => 'node')(resolvedHandleOption))(displayNameOption)
+
+  const ownEntry: readonly SubtreeEntry[] =
+    isSome(resolvedHandleOption)
+      ? [{ kind: astNodeToSubtreeKind(node.kind), id: resolvedHandleOption.value, label, depth }]
+      : []
+
+  return [
+    ...ownEntry,
+    ...node.children.flatMap((child) => astSubtrees(child, depth + 1, nodeToHandle))
+  ]
+}
+
+const fallbackSubtreesFromParsedAst = (source: string): readonly SubtreeEntry[] => {
+  const parsed = parseBtl(source)
+  if (!parsed.ok) {
+    return []
+  }
+
+  const handleMap = buildHandleMap(parsed.value.root)
+  return astSubtrees(parsed.value.root, 0, handleMap.nodeToHandle)
 }
 
 /**
@@ -153,53 +210,7 @@ export const listSubtreesFromSource = (
     variableIcons: safeMergedStyleSheet.variableIcons
   })
 
-  return parsed.ok ? listSubtrees(parsed.tree) : []
-}
-
-const firstNonBlockLine = (source: string): { readonly line: number; readonly col: number; readonly text: string } | undefined =>
-  source
-    .replace(/\r\n/g, '\n')
-    .split('\n')
-    .map((line, index) => ({ line: index + 1, col: line.search(/\S/) + 1, text: line }))
-    .find(({ text }) => {
-      const trimmed = text.trim()
-      return trimmed.length > 0 && !trimmed.startsWith('//')
-    })
-
-const parseSupplementalStyleSource = (
-  source: string
-):
-  | { readonly ok: true; readonly styleSheet: ReturnType<typeof applyDefinitionsToStyleSheet>; readonly strippedSource: string }
-  | { readonly ok: false; readonly error: ParseErr } => {
-  const definitionsExtraction = extractDefinitionsBlock(source)
-  if (!definitionsExtraction.ok) {
-    return definitionsExtraction
-  }
-
-  const styleExtraction = extractStyleSheet(definitionsExtraction.strippedSource)
-  if (!styleExtraction.ok) {
-    return styleExtraction
-  }
-
-  const leftoverOption = fromNullable(firstNonBlockLine(styleExtraction.strippedSource))
-  if (isSome(leftoverOption)) {
-    const leftover = leftoverOption.value
-    return {
-      ok: false,
-      error: {
-        ok: false,
-        line: leftover.line,
-        col: leftover.col,
-        error: 'Supplemental styleSource may only contain defs and style blocks'
-      }
-    }
-  }
-
-  return {
-    ok: true,
-    strippedSource: styleExtraction.strippedSource,
-    styleSheet: applyDefinitionsToStyleSheet(styleExtraction.styleSheet, definitionsExtraction.definitions)
-  }
+  return parsed.ok ? listSubtrees(parsed.tree) : fallbackSubtreesFromParsedAst(sourceStyle.strippedSource)
 }
 
 /**
@@ -272,9 +283,7 @@ const applyStyleToIcons = (
 ): readonly IconSpec[] | undefined => {
   const styleIconOption = fromNullable(style.icon)
   if (!isNone(styleIconOption) && styleIconOption.value.length > 0) {
-    const pos = styleIconOption.value.length === 1
-      ? getOrElse<IconSpec['pos']>(() => 'upper-left')(fromNullable(style.iconPos))
-      : 'upper-left'
+    const pos = getOrElse<IconSpec['pos']>(() => 'upper-left')(fromNullable(style.iconPos))
     return styleIconOption.value.map((name) => ({
       name,
       pos,
@@ -354,95 +363,6 @@ const renderErrorToResolveError = (error: RenderError): ResolveError => {
   }
 }
 
-type SourceStyleExtraction =
-  | {
-      readonly ok: true
-      readonly strippedSource: string
-      readonly sourceStyleSheet: ReturnType<typeof applyDefinitionsToStyleSheet>
-    }
-  | { readonly ok: false; readonly parseError: ParseErr }
-
-const extractSourceStyle = (source: string, ignoreSourceStyle = false): SourceStyleExtraction => {
-  const definitionsExtraction = extractDefinitionsBlock(source)
-  if (!definitionsExtraction.ok) {
-    return {
-      ok: false,
-      parseError: definitionsExtraction.error
-    }
-  }
-
-  const styleExtraction = extractStyleSheet(definitionsExtraction.strippedSource)
-  if (!styleExtraction.ok) {
-    return {
-      ok: false,
-      parseError: styleExtraction.error
-    }
-  }
-
-  const sourceSheet = ignoreSourceStyle
-    ? {
-        ...styleExtraction.styleSheet,
-        variables: mapFromEntries<string, string>([]),
-        variableIcons: [],
-        rules: []
-      }
-    : styleExtraction.styleSheet
-
-  return {
-    ok: true,
-    strippedSource: styleExtraction.strippedSource,
-    sourceStyleSheet: applyDefinitionsToStyleSheet(sourceSheet, definitionsExtraction.definitions)
-  }
-}
-
-type CompileStyleContext =
-  | {
-      readonly ok: true
-      readonly mergedStyleSheet: ReturnType<typeof applyDefinitionsToStyleSheet>
-      readonly effectiveVariables: ReadonlyMap<string, string>
-    }
-  | { readonly ok: false; readonly parseError: ParseErr }
-
-const buildCompileStyleContext = (
-  sourceStyleSheet: ReturnType<typeof applyDefinitionsToStyleSheet>,
-  options: CompileOptions
-): CompileStyleContext => {
-  const styleSourceOption = fromNullable(options.styleSource)
-  if (isNone(styleSourceOption)) {
-    const variablesOption = fromNullable(options.variables)
-    const effectiveVariables = isNone(variablesOption)
-      ? sourceStyleSheet.variables
-      : mergeMaps(sourceStyleSheet.variables, variablesOption.value)
-
-    return {
-      ok: true,
-      mergedStyleSheet: sourceStyleSheet,
-      effectiveVariables
-    }
-  }
-
-  const supplementalStyleSheet = parseSupplementalStyleSource(styleSourceOption.value)
-  if (!supplementalStyleSheet.ok) {
-    return {
-      ok: false,
-      parseError: supplementalStyleSheet.error
-    }
-  }
-
-  const mergedStyleSheet = mergeStyleSheets(sourceStyleSheet, supplementalStyleSheet.styleSheet)
-
-  const variablesOption = fromNullable(options.variables)
-  const effectiveVariables = isNone(variablesOption)
-    ? mergedStyleSheet.variables
-    : mergeMaps(mergedStyleSheet.variables, variablesOption.value)
-
-  return {
-    ok: true,
-    mergedStyleSheet,
-    effectiveVariables
-  }
-}
-
 type SelectedCompileTree =
   | { readonly ok: true; readonly tree: OrgTree }
   | { readonly ok: false; readonly resolveErrors: readonly ResolveError[] }
@@ -470,11 +390,14 @@ const selectCompileTree = (
 ): SelectedCompileTree => {
   const requestedSubtreeIds = normalizeSubtreeIds(options.subtreeIds)
   const subtreeIdOption = fromNullable(options.subtreeId)
+  const upstreamIdOption = fromNullable(options.upstreamId)
   const treeOrNone: Option<OrgTree> = requestedSubtreeIds.length > 0
     ? isolateSubtrees(resolvedTree, requestedSubtreeIds)
-    : isNone(subtreeIdOption)
-      ? some(resolvedTree)
-      : isolateSubtree(resolvedTree, subtreeIdOption.value)
+    : !isNone(subtreeIdOption)
+      ? isolateSubtree(resolvedTree, subtreeIdOption.value)
+      : !isNone(upstreamIdOption)
+        ? isolateUpstreamSubtree(resolvedTree, upstreamIdOption.value)
+        : some(resolvedTree)
 
   if (isNone(treeOrNone) === true) {
     const unknownHandle = unknownHandleFromOptions(requestedSubtreeIds, subtreeIdOption)
@@ -488,6 +411,8 @@ const selectCompileTree = (
           col: 0,
           message: requestedSubtreeIds.length > 0
             ? `No subtreeIds found in tree: "${unknownHandle}"`
+            : !isNone(upstreamIdOption)
+              ? `upstreamId not found in tree: "${upstreamIdOption.value}"`
             : `subtreeId not found in tree: "${getOrElse<string>(() => '')(subtreeIdOption)}"`
         }
       ]
@@ -724,7 +649,10 @@ export const compile = (
     }
   }
 
-  const compileStyle = buildCompileStyleContext(sourceStyle.sourceStyleSheet, options)
+  const compileStyle = buildCompileStyleContext(sourceStyle.sourceStyleSheet, {
+    styleSource: options.styleSource,
+    variables: options.variables
+  })
   if (!compileStyle.ok) {
     return {
       ok: false,

@@ -211,6 +211,20 @@ Define or adjust ADTs and branded/refined types. Add smart constructors (`mk*`, 
 Confirm failing tests exist (via the TDD gate above). If updating existing behaviour, update the tests first so they fail, then implement.
 Do not add new tests for new behaviour here — that is `tsfpp-tdd`'s job.
 
+When writing or updating test code, always use AAA structure with a blank line between each phase:
+
+```ts
+it('returns None when the input is empty', () => {
+  const raw = ''                 // Arrange
+
+  const result = mkUserId(raw)   // Act
+
+  expect(result).toEqual(none)   // Assert
+})
+```
+
+Never collapse these blank lines. Never use `if (isSome(...))` or `if (isOk(...))` as guards — assert with `toEqual(some(...))` / `toEqual(ok(...))` directly.
+
 **Step 4 — Implement**
 Keep changes local and compositional. Do not refactor unrelated code.
 
@@ -227,11 +241,17 @@ Do not fabricate tool outcomes.
 ## Escalation policy
 
 Pause and ask when:
-1. A MUST rule would need to be violated
-2. Requirements are underspecified and would force invented domain behaviour
-3. A change is risky without explicit boundary contracts
+1. Requirements are underspecified and would force invented domain behaviour
+2. A change is risky without explicit boundary contracts
 
 Provide: blocking condition · minimal clarification needed · one safe fallback.
+
+**Never pause to ask permission to fix a violation you have already identified.**
+If you know the correct fix, apply it. Do not leave the codebase in a broken state
+and ask "would you like me to fix this?" — that is not a choice to offer.
+
+The only legitimate reason to pause is genuine ambiguity about *what* to build,
+not uncertainty about *how* to fix a known violation.
 
 ---
 

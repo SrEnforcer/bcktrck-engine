@@ -9,7 +9,8 @@
  * @packageDocumentation
  */
 
-import { assoc, conj, entriesOfMap, fromNullable, getOrElse, intoMap, intoSet, isNone } from '@tsfpp/prelude'
+import type { Option } from '@tsfpp/prelude'
+import { assoc, conj, entriesOfMap, fromNullable, getOrElse, intoMap, intoSet, isNone, none, some } from '@tsfpp/prelude'
 import type { DeptId, NodeId } from '../types/branded'
 import type { DottedEdge, OrgNode, OrgTree } from '../types/org-tree'
 
@@ -31,7 +32,7 @@ export type AltChain = readonly NodeId[]
 
 type IndexedOrgNode = {
   readonly node: OrgNode
-  readonly parentId: string | null
+  readonly parentId: Option<string>
 }
 
 const childNodes = (node: OrgNode): readonly OrgNode[] =>
@@ -41,14 +42,14 @@ const rawId = (id: NodeId | DeptId): string => id
 
 const buildNodeIndex = (
   node: OrgNode,
-  parentId: string | null = null
+  parentId: Option<string> = none
 ): ReadonlyMap<string, IndexedOrgNode> => {
   const ownEntry = intoMap<string, IndexedOrgNode>([[rawId(node.id), { node, parentId }]])
 
   return childNodes(node).reduce<ReadonlyMap<string, IndexedOrgNode>>(
     (acc, child) => intoMap([
       ...entriesOfMap(acc),
-      ...entriesOfMap(buildNodeIndex(child, rawId(node.id)))
+      ...entriesOfMap(buildNodeIndex(child, some(rawId(node.id))))
     ]),
     ownEntry
   )
@@ -62,9 +63,9 @@ const buildVerticalPathFromIndex = (
   if (isNone(currentOption)) return []
   const current = currentOption.value
 
-  return isNone(fromNullable(current.parentId))
+  return isNone(current.parentId)
     ? [current.node.id]
-    : [current.node.id, ...buildVerticalPathFromIndex(index, getOrElse<string>(() => '')(fromNullable(current.parentId)))]
+    : [current.node.id, ...buildVerticalPathFromIndex(index, current.parentId.value)]
 }
 
 const findDirectManagerId = (
@@ -75,7 +76,7 @@ const findDirectManagerId = (
   if (isNone(currentOption)) return undefined
   const current = currentOption.value
 
-  const parentIdOption = fromNullable(current.parentId)
+  const parentIdOption = current.parentId
   if (isNone(parentIdOption)) return undefined
 
   const parentOption = fromNullable(index.get(parentIdOption.value))

@@ -60,8 +60,10 @@ const buildStaffForNode = (input: BuildStaffForNodeInput): readonly StaffPositio
   }
   const parentPos = parentPosOption.value
 
-  const left = [...input.node.staffLeft]
-    .reverse()
+  const reverseReadonly = <T>(values: ReadonlyArray<T>): ReadonlyArray<T> =>
+    values.reduce<ReadonlyArray<T>>((acc, value) => [value, ...acc], [])
+
+  const left = reverseReadonly(input.node.staffLeft)
     .map((staffId, index) => toStaffPosition({
       parentX: parentPos.x,
       parentY: parentPos.y,

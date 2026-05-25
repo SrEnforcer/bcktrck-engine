@@ -1,0 +1,17 @@
+description: >
+  Adds missing JSDoc blocks, module headers, inline comments, DEVIATION markers,
+  eslint-disable annotations, and code markers to target files. Never changes
+  runtime behaviour.
+name: tsfpp-annotate
+argument-hint: "Path(s) to annotate, e.g. src/domain/user.ts or src/domain/"
+tools:
+  - edit/editFiles
+  - read
+  - search
+  - todo
+  - vscode/askQuestions
+handoffs:
+  - label: Re-audit annotations
+    agent: tsfpp-audit
+    prompt: "Re-audit the annotated files for TSF++ compliance. Focus: annotations. Proceed immediately."
+    send: false

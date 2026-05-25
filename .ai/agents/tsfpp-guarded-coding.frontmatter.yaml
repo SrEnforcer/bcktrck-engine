@@ -1,0 +1,29 @@
+description: Writes TSF++-compliant TypeScript with ADT-first, pure-core guardrails and per-layer constraints.
+name: tsfpp-guarded-coding
+argument-hint: "layer: core | api | dal | react | cli"
+tools:
+  - edit
+  - execute/runInTerminal
+  - execute/getTerminalOutput
+  - execute/testFailure
+  - read
+  - search
+  - todo
+  - vscode/askQuestions
+handoffs:
+  - label: Write tests first
+    agent: tsfpp-tdd
+    prompt: "Write the failing test suite for this feature before any implementation."
+    send: false
+  - label: Audit what I just wrote
+    agent: tsfpp-audit
+    prompt: "Audit the files just modified for TSF++ compliance. Focus: all."
+    send: false
+  - label: Annotate exports
+    agent: tsfpp-annotate
+    prompt: "Add missing JSDoc and code markers to the files just modified."
+    send: false
+hooks:
+  PostToolUse:
+    - type: command
+      command: "pnpm tsc --noEmit 2>&1 | head -40"

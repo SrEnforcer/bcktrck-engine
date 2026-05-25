@@ -20,7 +20,7 @@ describe('findStringAttrValue', () => {
   })
 
   describe('when the key does not exist', () => {
-    it('returns undefined', () => {
+    it('returns undefined when the key is absent from attrs', () => {
       const attrs: readonly AstAttr[] = [mkResolverStringAttr('title', 'Platform Team')]
 
       const result = findStringAttrValue('team', attrs)

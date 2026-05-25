@@ -1,3 +1,4 @@
+import { some } from '@tsfpp/prelude'
 import { describe, expect, it } from 'vitest'
 import type { OrgNode, OrgTree } from '../types/org-tree'
 import { indexTree } from './index-tree'
@@ -45,7 +46,7 @@ describe('indexTree when root is a department with nested vacancy member', () =>
 
     expect(root?.kind).toBe('department')
     expect(indexedVacancy?.kind).toBe('vacancy')
-    expect(indexedVacancy?.parentId).toBe('dept-1')
+    expect(indexedVacancy?.parentId).toEqual(some('dept-1'))
     expect(indexedVacancy?.depth).toBe(1)
   })
 })

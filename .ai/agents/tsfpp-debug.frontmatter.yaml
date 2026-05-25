@@ -1,0 +1,26 @@
+description: >
+  TSF++ debugging and bug-fixing agent. Diagnoses failures in TSF++ codebases:
+  traces Err/None propagation through pipelines, identifies where a Result chain
+  breaks, inspects type-level bugs, locates boundary violations, and produces a
+  structured diagnosis before proposing a minimal fix. Never widens types or
+  introduces forbidden constructs to silence an error.
+name: tsfpp-debug
+argument-hint: "Describe the symptom: error message, unexpected behaviour, or failing test"
+tools:
+  - edit/editFiles
+  - execute/runInTerminal
+  - execute/getTerminalOutput
+  - execute/testFailure
+  - read
+  - search
+  - todo
+  - vscode/askQuestions
+handoffs:
+  - label: Fix with Guarded Coding
+    agent: tsfpp-guarded-coding
+    prompt: "Apply the fix identified in the debug report. Do not modify the diagnosis section."
+    send: false
+  - label: Audit after fix
+    agent: tsfpp-audit
+    prompt: "Audit the files modified during the debug session. Focus: types,prelude."
+    send: false

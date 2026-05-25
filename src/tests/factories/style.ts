@@ -6,7 +6,7 @@
  * @packageDocumentation
  */
 
-import { intoMap } from '@tsfpp/prelude'
+import { intoMap, none } from '@tsfpp/prelude'
 import type { AstOrg } from '../../types/ast'
 import { asNodeId } from '../../types/branded'
 import type { IndexedTree } from '../../layout/types'
@@ -35,6 +35,6 @@ export const mkStyleDslAst = (): AstOrg => ({
 export const mkStyleDslIndexed = (): IndexedTree => ({
   rootId: 'ceo',
   nodes: intoMap([
-    ['ceo', { id: asNodeId('ceo'), kind: 'employee', label: 'CEO', depth: 0, parentId: null, childIndex: 0, children: [], staffLeft: [], staffRight: [] }]
+    ['ceo', { id: asNodeId('ceo'), kind: 'employee', label: 'CEO', depth: 0, parentId: none, childIndex: 0, children: [], staffLeft: [], staffRight: [] }]
   ])
 })

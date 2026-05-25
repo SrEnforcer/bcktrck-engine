@@ -1,0 +1,9 @@
+name: react-coding-standard
+description: >
+  Normative TSF++/React rules for all .tsx and React-relevant .ts files:
+  component shape, props contracts, state elimination ladder, effect discipline,
+  memoization policy, server state via TanStack Query, forms via React Hook Form
+  and Zod, routing via TanStack Router, global state via Zustand/Jotai, Tailwind
+  and cva styling, accessibility, testing, and module organisation. Profile of
+  coding-standard — all base TSF++ rules still apply. Load when writing or
+  reviewing any component, hook, form, route, or store file.

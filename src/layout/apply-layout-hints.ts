@@ -258,8 +258,10 @@ const createSubtreeHangingIndex = (tree: IndexedTree): ReadonlyMap<string, boole
       []
     )
 
-  return [...allNodeIds]
-    .reverse()
+  const reverseReadonly = <T>(values: ReadonlyArray<T>): ReadonlyArray<T> =>
+    values.reduce<ReadonlyArray<T>>((acc, value) => [value, ...acc], [])
+
+  return reverseReadonly(allNodeIds)
     .reduce((memo, nodeId) => {
       const node = tree.nodes.get(nodeId)
       const nodeOption = fromNullable(node)
@@ -342,8 +344,18 @@ const childXsForNode = (
       return isNone(xOption) ? [] : [xOption.value]
     })
 
+const insertAscending = (sorted: ReadonlyArray<number>, value: number): ReadonlyArray<number> => {
+  const insertionIndex = sorted.findIndex((entry) => entry > value)
+  return insertionIndex === -1
+    ? [...sorted, value]
+    : [...sorted.slice(0, insertionIndex), value, ...sorted.slice(insertionIndex)]
+}
+
+const sortAscending = (values: ReadonlyArray<number>): ReadonlyArray<number> =>
+  values.reduce<ReadonlyArray<number>>((sorted, value) => insertAscending(sorted, value), [])
+
 const medianX = (xs: ReadonlyArray<number>): number => {
-  const sorted = [...xs].sort((a, b) => a - b)
+  const sorted = sortAscending(xs)
   const middleIndex = Math.floor((sorted.length - 1) / 2)
   const middle = sorted[middleIndex]
   const upperMiddle = sorted[middleIndex + 1]

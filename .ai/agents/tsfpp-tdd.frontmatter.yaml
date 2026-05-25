@@ -1,0 +1,23 @@
+description: >
+  Writes failing tests before any implementation exists. The mandatory first step
+  for all new functionality, use-cases, components, and handlers. Hands off to
+  tsfpp-guarded-coding once a complete red test suite exists.
+name: tsfpp-tdd
+argument-hint: "target=<what to build> layer=<core|api|dal|react|cli>"
+tools:
+  - edit/createFile
+  - edit/editFiles
+  - execute/runInTerminal
+  - execute/getTerminalOutput
+  - execute/testFailure
+  - read
+  - search
+  - todo
+  - vscode/askQuestions
+handoffs:
+  - label: Implement against these tests
+    agent: tsfpp-guarded-coding
+    prompt: >
+      Failing tests are in place. Implement the production code to make them pass.
+      Do not modify any test file. All tests must be green before completion.
+    send: false

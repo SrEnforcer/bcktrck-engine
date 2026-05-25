@@ -6,137 +6,132 @@ applyTo: "{**/routes/**,**/handlers/**,**/api/**}/*.ts"
 
 Full standard: `node_modules/@tsfpp/standard/spec/API_CODING_STANDARD.md`
 Boundary API: `node_modules/@tsfpp/boundary/README.md`
-Extends: `tsfpp-base.instructions.md` (all base rules apply)
+Extends: `tsfpp-base.instructions.md` — all base rules apply
 
-## Handler shape
+## Default handler shape — `createJsonHandler`
 
-Handlers are thin. The only permitted steps are: **parse → call use-case → map response**.
+Prefer `createJsonHandler` for all JSON POST/PUT/PATCH handlers. It handles
+context extraction, Zod parsing, error lifting, and `apiErrorToResponse`
+automatically. Your `handle` function receives already-validated data.
 
 ```ts
 import {
-  extractContext, fromZodError, apiErrorToResponse,
-  createdResponse, okResponse, noContentResponse, acceptedResponse,
-  withIdempotency, withRequestLog,
+  createJsonHandler, type HandlerFactory,
+  createdResponse, withIdempotency, withRequestLog,
 } from '@tsfpp/boundary'
-import { isErr, pipe } from '@tsfpp/prelude'
+import { err, isErr, ok, pipe } from '@tsfpp/prelude'
+import { z } from 'zod'
 
-const createTrackHandler: RawHandler = async (req) => {
-  const ctx = extractContext(req, '/v1/tracks')           // 1. context — always first
+const createOrderBody = z.object({
+  customerId:  z.string().uuid(),
+  amountCents: z.number().int().positive(),
+})
+
+export const createOrderHandler: HandlerFactory<Deps> = (deps) =>
+  createJsonHandler({
+    deps,
+    routeTemplate: '/v1/orders',
+    schema: createOrderBody,
+    handle: async ({ deps, ctx, body }) => {
+      const result = await deps.orders.create(body)
+      if (isErr(result)) return err(result.error)
+      return ok(createdResponse(result.value, `/v1/orders/${result.value.id}`, {
+        'X-Request-Id': ctx.traceId,
+      }))
+    },
+  })
+```
+
+Use `createHandler` for handlers without a JSON body (GET, DELETE, health checks).
+
+## Manual handler shape
+
+Only when `createJsonHandler` does not fit (multipart, streaming, early exits before parse):
+
+```ts
+export const handler: HandlerFactory<Deps> = (deps) => async (req) => {
+  const ctx = extractContext(req, '/v1/orders')           // 1. always first, always with routeTemplate
 
   const raw    = await req.json().catch(() => null)
-  const parsed = CreateTrackSchema.safeParse(raw)
+  const parsed = createOrderBody.safeParse(raw)
   if (!parsed.success)                                    // 2. validate
     return apiErrorToResponse(fromZodError(parsed.error), ctx)
 
-  const result = await createTrack(parsed.data)           // 3. use-case
+  const result = await deps.orders.create(parsed.data)   // 3. use-case
   if (isErr(result)) return apiErrorToResponse(result.error, ctx)
 
-  return createdResponse(result.value, `/v1/tracks/${result.value.id}`, {
+  return createdResponse(result.value, `/v1/orders/${result.value.id}`, {
     'X-Request-Id': ctx.traceId,
-  })                                                      // 4. respond
+  })
 }
 ```
 
 ## Boundary imports
 
-All HTTP primitives come from `@tsfpp/boundary`. Never construct `new Response()` directly.
+All HTTP primitives come from `@tsfpp/boundary`. Never `new Response(...)`.
 
 ```ts
 import {
-  // Context
-  extractContext,
-  // Validation
-  fromZodError, mkValidationError,
-  // Error mapping
-  apiErrorToResponse, apiErrorToProblem,
-  // Response builders
-  okResponse, createdResponse, noContentResponse,
-  acceptedResponse, redirectResponse, jsonResponse, problemResponse, mkProblem,
-  // Pagination
-  mkPaginated, parsePaginationQuery, encodeCursor, decodeCursor,
-  // LRO
-  mkRunningOp, mkSucceededOp, mkFailedOp,
-  // Bulk
-  bulkResponse, mkBulkOkItem, mkBulkErrorItem,
-  // Security
-  baselineSecurityHeaders, corsHeaders, rateLimitHeaders,
-  // Middleware
-  withIdempotency, withRequestLog,
-  // Webhooks
-  signWebhook, verifyWebhook,
-  // Types
-  type RawHandler, type HandlerFactory, type RequestContext,
+  createJsonHandler, createHandler,
+  parseJsonBody, parseJsonWithSchema,
+  parsePaginationFromRequest, mkNextCursor,
+  extractContext, fromZodError, apiErrorToResponse,
+  okResponse, createdResponse, noContentResponse, acceptedResponse,
+  mkProblem, problemResponse,
+  mkPaginated, withIdempotency, withRequestLog,
+  type HandlerFactory, type RawHandler,
+  type IdempotencyStore, type RequestLogger,
 } from '@tsfpp/boundary'
+```
+
+## Middleware composition
+
+```ts
+// Always: outermost-last, withRequestLog always outermost
+export const makeRoute = (deps: Deps, store: IdempotencyStore, logger: RequestLogger): RawHandler =>
+  pipe(
+    createOrderHandler(deps),
+    withIdempotency(store),
+    withRequestLog(logger, '/v1/orders'),
+  )
 ```
 
 ## Validation
 
-All input validated with Zod at the boundary via `safeParse` — never `parse` (throws):
-
 ```ts
-const parsed = CreateTrackSchema.safeParse(raw)
+// Inside createJsonHandler — already handled, body is typed
+handle: async ({ body }) => { /* body is z.infer<typeof schema> */ }
+
+// Manual — always safeParse, never parse (throws)
+const parsed = schema.safeParse(raw)
 if (!parsed.success) return apiErrorToResponse(fromZodError(parsed.error), ctx)
 ```
-
-Never pass unvalidated `req.json()` into the domain.
 
 ## Error mapping
 
 ```ts
 // Yes — Result propagates; mapped once at the boundary
-const result = await createTrack(input)
 if (isErr(result)) return apiErrorToResponse(result.error, ctx)
 
-// No — throw crosses the boundary untyped
+// Log cause before mapping dependency/internal errors
+if (result.error.kind === 'dependency') {
+  logger.error({ message: 'payment.gateway.failed', error: String(result.error.cause), traceId: ctx.traceId })
+}
+return apiErrorToResponse(result.error, ctx)
+
+// No — never throw, never new Response
 throw new Error('not found')
 ```
 
-`dependency` and `internal` ApiError variants contain a `cause` — **log `cause` before calling `apiErrorToResponse`**, it is stripped from the response.
-
-## Middleware composition
-
-Compose via `pipe`, outermost-last. `withRequestLog` must always be outermost:
+## `mkProblem` — object form (v1.2.0)
 
 ```ts
-const handler: RawHandler = pipe(
-  createTrackHandler,           // business logic
-  withIdempotency(store),       // replay / in-flight guard
-  withRequestLog(logger, '/v1/tracks'), // outermost — logs every outcome
-)
+// Yes — object argument form
+mkProblem({ status: 429, code: 'quota_exceeded', title: 'Quota exceeded', traceId: ctx.traceId })
+
+// No — old positional form
+mkProblem(429, 'quota_exceeded', 'Quota exceeded', ctx.traceId)
 ```
-
-## Pagination
-
-```ts
-const pageQuery = parsePaginationQuery(req.url, 100) // Result<PageQuery, ValidationError>
-if (isErr(pageQuery)) return apiErrorToResponse(pageQuery.error, ctx)
-
-const page = mkPaginated(items, nextCursor)           // totalCount omitted unless precomputed
-return okResponse(page)
-```
-
-## Rate limiting
-
-Attach `rateLimitHeaders` to **all** responses on rate-limited endpoints, not only 429s:
-
-```ts
-return okResponse(body, rateLimitHeaders(state))
-```
-
-## Security
-
-```ts
-// Merge baseline headers into every response
-return okResponse(body, { ...baselineSecurityHeaders, ...rateLimitHeaders(state) })
-
-// CORS — never reflect Origin blindly; allowedOrigins from config only
-return okResponse(body, corsHeaders(allowedOrigins, requestOrigin))
-```
-
-- All routes require authentication unless explicitly marked `// PUBLIC`
-- Never log `principalId`, credentials, or full request bodies at `info` level
-- Never reflect user input in error messages without sanitisation
-- Idempotency keys required on state-mutating operations — use `withIdempotency`
 
 ## Status codes
 
@@ -144,11 +139,18 @@ return okResponse(body, corsHeaders(allowedOrigins, requestOrigin))
 |---|---|---|
 | Read success | 200 | `okResponse` |
 | Created | 201 | `createdResponse(body, location)` |
-| Accepted (async / LRO) | 202 | `acceptedResponse(operation, pollUrl)` |
+| Accepted (LRO) | 202 | `acceptedResponse(operation, pollUrl)` |
 | No content | 204 | `noContentResponse` |
 | Multi-status (bulk) | 207 | `bulkResponse(items)` |
 | Validation failure | 422 | `apiErrorToResponse(fromZodError(e), ctx)` |
 | Not found | 404 | `apiErrorToResponse({ kind: 'not_found', ... }, ctx)` |
-| Conflict | 409 | `apiErrorToResponse({ kind: 'conflict', ... }, ctx)` |
-| Rate limited | 429 | `apiErrorToResponse({ kind: 'rate_limit', ... }, ctx)` |
 | Server error | 500 | `apiErrorToResponse({ kind: 'internal', cause }, ctx)` |
+
+## Security
+
+- All routes require authentication unless explicitly marked `// PUBLIC`
+- Never log `principalId`, credentials, or full request bodies at `info`
+- Never reflect user input in error messages without sanitisation
+- Mutating operations require idempotency — `withIdempotency` in middleware chain
+- `baselineSecurityHeaders` merged into every response
+- `corsHeaders(allowedOrigins, requestOrigin)` — never reflects `Origin` blindly

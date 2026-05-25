@@ -1,4 +1,4 @@
-import { intoMap } from '@tsfpp/prelude'
+import { intoMap, none } from '@tsfpp/prelude'
 import { describe, expect, it } from 'vitest'
 import type { RenderConfig } from '../types'
 import {
@@ -123,7 +123,7 @@ describe('shared svg helpers: config and validation', () => {
       {
         rootId: 'root',
         nodes: intoMap([
-          ['root', { id: 'root', kind: 'employee', label: 'Root', depth: 0, parentId: null, childIndex: 0, children: [], staffLeft: [], staffRight: [] }]
+          ['root', { id: 'root', kind: 'employee', label: 'Root', depth: 0, parentId: none, childIndex: 0, children: [], staffLeft: [], staffRight: [] }]
         ])
       },
       { rootId: 'root', positions: intoMap([['root', { x: 0, y: 0 }]]) }
@@ -132,7 +132,7 @@ describe('shared svg helpers: config and validation', () => {
       {
         rootId: 'root',
         nodes: intoMap([
-          ['root', { id: 'root', kind: 'employee', label: 'Root', depth: 0, parentId: null, childIndex: 0, children: [], staffLeft: [], staffRight: [] }]
+          ['root', { id: 'root', kind: 'employee', label: 'Root', depth: 0, parentId: none, childIndex: 0, children: [], staffLeft: [], staffRight: [] }]
         ])
       },
       { rootId: 'root', positions: intoMap([]) }

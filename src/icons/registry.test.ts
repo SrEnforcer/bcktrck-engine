@@ -25,9 +25,12 @@ describe('icon registry defaults', () => {
 describe('icon registry lookups', () => {
   it('returns a lucide node and known status for registered icons', () => {
     const icon = getIcon('user')
+    const cannabis = getIcon('cannabis')
 
     expect(icon).toBeDefined()
+    expect(cannabis).toBeDefined()
     expect(isKnownIcon('user')).toBe(true)
+    expect(isKnownIcon('cannabis')).toBe(true)
   })
 
   it('returns undefined and false for unknown icon names', () => {
@@ -39,6 +42,7 @@ describe('icon registry lookups', () => {
     const names = listIconNames()
 
     expect(names.includes('user')).toBe(true)
+    expect(names.includes('cannabis')).toBe(true)
     expect(names.includes('cirkle-fading-plus')).toBe(true)
   })
 })

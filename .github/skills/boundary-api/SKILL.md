@@ -1,15 +1,17 @@
 ---
 name: boundary-api
 description: >
-  Complete API surface of @tsfpp/boundary: typed request context, RFC 9457 error
+  Complete API surface of @tsfpp/boundary v1.2.0: typed request context, handler
+  helpers (createJsonHandler, createHandler, parseJsonBody), RFC 9457 error
   responses, ApiError taxonomy, response builders, cursor pagination, long-running
   operations, bulk operations, idempotency, observability middleware, webhook
-  signing, rate-limit headers, CORS, and cache policy. Load when writing or
-  reviewing any HTTP handler that imports from @tsfpp/boundary, or when choosing
-  between response builders, error mappers, or middleware composition patterns.
+  signing, rate-limit headers, CORS, cache policy, loadConfig, and Node.js dev
+  adapter. Load when writing or reviewing any HTTP handler that imports from
+  @tsfpp/boundary, or when choosing between handler helpers, response builders,
+  error mappers, or middleware composition patterns.
 ---
 
-# @tsfpp/boundary API
+# @tsfpp/boundary API — v1.2.0
 
 Framework-agnostic Fetch API primitives. One peer dependency: `@tsfpp/prelude`.
 `kind` is the discriminant for all ADTs in this module.
@@ -17,7 +19,133 @@ Framework-agnostic Fetch API primitives. One peer dependency: `@tsfpp/prelude`.
 ## Import path
 
 ```ts
-import { extractContext, apiErrorToResponse, ... } from '@tsfpp/boundary';
+import { createJsonHandler, extractContext, apiErrorToResponse, ... } from '@tsfpp/boundary'
+```
+
+---
+
+## Handler helpers (v1.2.0)
+
+Prefer these over hand-rolling the parse → validate → respond pattern.
+
+### `createJsonHandler` — the default for JSON POST/PUT/PATCH
+
+```ts
+export const createOrderHandler: HandlerFactory<Deps> = (deps) =>
+  createJsonHandler({
+    deps,
+    routeTemplate: '/v1/orders',
+    schema: createOrderBody,          // Zod schema
+    handle: async ({ deps, ctx, body }) => {
+      const result = await deps.orders.create(body)
+      if (isErr(result)) return err(result.error)
+      return ok(createdResponse(result.value, `/v1/orders/${result.value.id}`, {
+        'X-Request-Id': ctx.traceId,
+      }))
+    },
+  })
+```
+
+`handle` receives `{ deps, ctx, body }` where `body` is already parsed and validated.
+Return `ok(Response)` for success or `err(ApiError)` for failure.
+`createJsonHandler` calls `extractContext`, runs `safeParse`, lifts Zod errors via `fromZodError`,
+and calls `apiErrorToResponse` on `Err`. You do not call these manually inside `handle`.
+
+### `createHandler` — for handlers without a JSON body
+
+```ts
+const getOrderHandler: HandlerFactory<Deps> = (deps) =>
+  createHandler({
+    deps,
+    routeTemplate: '/v1/orders/:id',
+    handle: async ({ deps, ctx, req }) => {
+      const id = new URL(req.url).pathname.split('/').at(-1) ?? ''
+      const result = await deps.orders.findById(id)
+      if (isErr(result)) return err(result.error)
+      return ok(okResponse(result.value, { 'X-Request-Id': ctx.traceId }))
+    },
+  })
+```
+
+### `parseJsonBody` / `parseJsonWithSchema` — manual parsing when needed
+
+```ts
+// Parse + validate in one step
+const body = await parseJsonWithSchema(req, createOrderBody)
+if (isErr(body)) return apiErrorToResponse(body.error, ctx)
+
+// Parse only (returns unknown)
+const raw = await parseJsonBody(req)
+if (isErr(raw)) return apiErrorToResponse(raw.error, ctx)
+```
+
+### `parsePaginationFromRequest` — cursor pagination from request
+
+```ts
+const page = parsePaginationFromRequest(req)   // Result<PageQuery, ValidationError>
+if (isErr(page)) return apiErrorToResponse(page.error, ctx)
+```
+
+### `mkNextCursor` — build next page cursor
+
+```ts
+const nextCursor = mkNextCursor(items, page.limit, item => item.id)
+return okResponse(mkPaginated(items.slice(0, page.limit), nextCursor))
+```
+
+---
+
+## Canonical handler shape (with createJsonHandler)
+
+```ts
+import { createJsonHandler, type HandlerFactory, createdResponse,
+         withIdempotency, withRequestLog } from '@tsfpp/boundary'
+import { err, isErr, ok, pipe } from '@tsfpp/prelude'
+
+export const createOrderHandler: HandlerFactory<Deps> = (deps) =>
+  createJsonHandler({
+    deps,
+    routeTemplate: '/v1/orders',
+    schema: createOrderBody,
+    handle: async ({ deps, ctx, body }) => {
+      const result = await deps.orders.create(body)
+      if (isErr(result)) return err(result.error)
+      return ok(createdResponse(result.value, `/v1/orders/${result.value.id}`, {
+        'X-Request-Id': ctx.traceId,
+      }))
+    },
+  })
+
+// Middleware — outermost-last, withRequestLog always outermost
+export const makeRoute = (deps: Deps, store: IdempotencyStore, logger: RequestLogger): RawHandler =>
+  pipe(
+    createOrderHandler(deps),
+    withIdempotency(store),
+    withRequestLog(logger, '/v1/orders'),
+  )
+```
+
+---
+
+## Manual handler shape (without createJsonHandler)
+
+Use only when createJsonHandler does not fit (multipart, streaming, etc.):
+
+```ts
+export const handler: HandlerFactory<Deps> = (deps) => async (req) => {
+  const ctx = extractContext(req, '/v1/orders')            // 1. always first
+
+  const raw    = await req.json().catch(() => null)
+  const parsed = schema.safeParse(raw)
+  if (!parsed.success) return apiErrorToResponse(fromZodError(parsed.error), ctx)
+
+  const result = await deps.orders.create(parsed.data)     // 3. use-case
+  if (isErr(result)) return apiErrorToResponse(result.error, ctx)
+
+  return createdResponse(result.value, `/v1/orders/${result.value.id}`, {
+    'X-Request-Id': ctx.traceId,
+  })
+}
 ```
 
 ---
@@ -26,207 +154,140 @@ import { extractContext, apiErrorToResponse, ... } from '@tsfpp/boundary';
 
 ### Branded primitives
 
-| Type | Smart constructor | Constraint |
-|---|---|---|
-| `TraceId` | `mkTraceId(raw)` → `Option<TraceId>` | any non-empty string |
-| `PrincipalId` | `mkPrincipalId(raw)` → `Option<PrincipalId>` | any non-empty string |
-| `Cursor` | internal — use `encodeCursor` | never construct directly |
-| `IdempotencyKey` | `mkIdempotencyKey(raw)` → `Option<IdempotencyKey>` | `[A-Za-z0-9_-]{1,255}` |
-| `WebhookEventId` | `mkWebhookEventId(raw)` → `Option<WebhookEventId>` | any non-empty string |
+| Type | Smart constructor |
+|---|---|
+| `TraceId` | `mkTraceId(raw)` → `Option<TraceId>` |
+| `PrincipalId` | `mkPrincipalId(raw)` → `Option<PrincipalId>` |
+| `IdempotencyKey` | `mkIdempotencyKey(raw)` → `Option<IdempotencyKey>` |
+| `Cursor` | internal — use `encodeCursor` / `mkNextCursor` |
+| `WebhookEventId` | `mkWebhookEventId(raw)` → `Option<WebhookEventId>` |
 
 ### Request context
 
 | Export | Description |
 |---|---|
-| `RequestContext` | `{ traceId, principalId: Option<PrincipalId>, idempotencyKey: Option<IdempotencyKey>, method, url, routeTemplate }` |
-| `extractContext(req, routeTemplate)` | Call at the top of every handler. Reads `traceparent` / `x-request-id` / `x-trace-id`; generates UUID fallback. `routeTemplate` must be the parameterised path (`/v1/tracks/:id`), never the resolved URL. |
-| `extractTraceId(req)` | Reads trace headers only; generates UUID fallback. |
+| `RequestContext` | `{ traceId, principalId, idempotencyKey, method, url, routeTemplate }` |
+| `extractContext(req, routeTemplate)` | Call first in every manual handler. Reads trace headers; generates UUID fallback. |
 
 ### Validation
 
 | Export | Description |
 |---|---|
 | `ValidationError` | `{ kind: 'validation'; message: string; issues: ReadonlyArray<FieldIssue> }` |
-| `FieldIssue` | `{ field: string; message: string }` |
-| `fromZodError(zodError)` | Lifts a `ZodError` into a `ValidationError`. Use after `safeParse`. |
-| `mkValidationError(message, issues?)` | Manual construction for non-Zod sources. |
+| `fromZodError(zodError)` | Lifts `ZodError` → `ValidationError` |
+| `mkValidationError(issues, message?)` | Manual construction |
 
 ### `ApiError` taxonomy
 
-Discriminated union on `kind`. Pass to `apiErrorToResponse`; never construct `ProblemDetails` manually for these variants.
-
-| `kind` | Extra fields | HTTP |
+| `kind` | HTTP | Notes |
 |---|---|---|
-| `validation` | `message`, `issues: ReadonlyArray<FieldIssue>` | 422 |
-| `not_found` | `resource: string`, `id: string` | 404 |
-| `conflict` | `detail: string` | 409 |
-| `permission` | `required: string` | 403 |
-| `unauthenticated` | — | 401 + `WWW-Authenticate` |
-| `rate_limit` | `retryAfterSeconds?: number` | 429 + `Retry-After` |
-| `precondition` | `detail: string` | 412 |
-| `gone` | `resource: string` | 410 |
-| `dependency` | `dependency: string`, `cause: unknown` | 502 — **log `cause` before calling mapper** |
-| `internal` | `cause: unknown` | 500 — **log `cause` before calling mapper** |
+| `validation` | 422 | |
+| `not_found` | 404 | |
+| `conflict` | 409 | |
+| `permission` | 403 | |
+| `unauthenticated` | 401 | |
+| `rate_limit` | 429 | |
+| `precondition` | 412 | |
+| `gone` | 410 | |
+| `dependency` | 502 | **log `cause` before calling mapper** |
+| `internal` | 500 | **log `cause` before calling mapper** |
 
-### Problem Details (RFC 9457)
+### Problem Details — `mkProblem` (object form in v1.2.0)
 
-| Export | Description |
-|---|---|
-| `ProblemDetails` | `{ type, title, status, code, detail?, instance?, traceId, errors? }` |
-| `mkProblem(status, code, title, traceId, opts?)` | Constructs a `ProblemDetails`. `type` defaults to `'about:blank'`. |
-| `problemResponse(problem, headers?)` | `Response` with `Content-Type: application/problem+json`. |
+```ts
+// v1.2.0 — object argument form
+mkProblem({ status: 429, code: 'quota_exceeded', title: 'Quota exceeded', traceId: ctx.traceId })
+mkProblem({ status: 404, code: 'not_found', title: 'Not found', traceId, opts: { instance: ctx.url } })
+```
 
 ### Response builders
 
-| Export | Status | Notes |
-|---|---|---|
-| `okResponse(body, headers?)` | 200 | |
-| `createdResponse(body, location, headers?)` | 201 | Sets `Location` header |
-| `acceptedResponse(operation, location, headers?)` | 202 | LRO — sets `Location` header |
-| `noContentResponse(headers?)` | 204 | No body — use after mutations with no return value |
-| `redirectResponse(status, location, headers?)` | 301/302/307/308 | Prefer 308 over 301, 307 over 302 |
-| `jsonResponse(status, body, headers?)` | any | Fallback when the above don't fit |
+| Export | Status |
+|---|---|
+| `okResponse(body, headers?)` | 200 |
+| `createdResponse(body, location, headers?)` | 201 |
+| `acceptedResponse(operation, location, headers?)` | 202 |
+| `noContentResponse(headers?)` | 204 |
+| `redirectResponse(status, location, headers?)` | 3xx |
+| `jsonResponse(status, body, headers?)` | any |
+| `problemResponse(problem, headers?)` | any |
 
 ### Error mapping
 
 | Export | Description |
 |---|---|
-| `apiErrorToProblem(error, ctx)` | `ApiError` → `ProblemDetails`. Exhaustive; never leaks `cause`. |
-| `apiErrorToResponse(error, ctx)` | `ApiError` → `Response`. Adds `WWW-Authenticate` on `unauthenticated`, `Retry-After` on `rate_limit`. **Prefer this over manual `problemResponse`**. |
-| `ErrorMapper<E>` | `(error: E, ctx: RequestContext) => Response` — implement for app-specific variants; delegate canonical variants to `apiErrorToResponse`. |
+| `apiErrorToResponse(error, ctx)` | `ApiError` → `Response`. Prefer over manual `problemResponse`. |
+| `apiErrorToProblem(error, ctx)` | `ApiError` → `ProblemDetails` |
 
 ### Pagination
 
+```ts
+const page = parsePaginationFromRequest(req)                // Result<PageQuery, ValidationError>
+const nextCursor = mkNextCursor(items, page.limit, i => i.id)
+return okResponse(mkPaginated(items.slice(0, page.limit), nextCursor))
+```
+
 | Export | Description |
 |---|---|
-| `Paginated<T>` | `{ items: ReadonlyArray<T>; nextCursor: Cursor \| null; totalCount: number \| null }` |
-| `PageQuery` | `{ limit: number; cursor: Cursor \| null }` |
-| `mkPaginated(items, nextCursor, totalCount?)` | Constructs a `Paginated<T>` body. `totalCount` — return `null` unless precomputed. |
-| `parsePaginationQuery(url, maxLimit?)` | Validates `limit` and `cursor` from URL query string → `Result<PageQuery, ValidationError>` |
-| `encodeCursor(payload)` | Record → opaque `Cursor` (base64url) |
-| `decodeCursor(cursor)` | `Cursor` → `Option<Record<string, unknown>>` |
+| `parsePaginationQuery(url, maxLimit?)` | From URL query string |
+| `parsePaginationFromRequest(req, maxLimit?)` | From Request directly (v1.2.0) |
+| `mkPaginated(items, nextCursor, totalCount?)` | `totalCount` → `null` unless precomputed |
+| `mkNextCursor(items, limit, keyFn)` | Builds cursor from last item (v1.2.0) |
+| `encodeCursor` / `decodeCursor` | Manual cursor encode/decode |
 
 ### Long-running operations
 
-`Operation<T>` is a discriminated union on `kind`: `running | succeeded | failed | cancelled`.
+```ts
+acceptedResponse(mkRunningOp(operationId), pollUrl)  // 202 trigger
+okResponse(mkSucceededOp(operationId, result, createdAt))  // polling endpoint
+```
 
-| Export | Description |
-|---|---|
-| `mkRunningOp(operationId, progress?)` | `progress` 0–100 |
-| `mkSucceededOp(operationId, result, createdAt)` | |
-| `mkFailedOp(operationId, error, createdAt)` | |
-| `mkCancelledOp(operationId, createdAt)` | |
+### Bulk
 
-Return `acceptedResponse(op, pollUrl)` from the trigger handler; return `okResponse(op)` from the polling handler.
-
-### Bulk operations
-
-| Export | Description |
-|---|---|
-| `BulkItem<T>` | `ok` (200/201) or `error` (4xx/5xx) variant |
-| `BulkResponse<T>` | `{ items: ReadonlyArray<BulkItem<T>> }` |
-| `mkBulkOkItem(body, status?)` | Successful item |
-| `mkBulkErrorItem(problem)` | Failed item from `ProblemDetails` |
-| `bulkResponse(items)` | `207 Multi-Status` |
+```ts
+bulkResponse([mkBulkOkItem(body), mkBulkErrorItem(problem)])  // 207
+```
 
 ### Rate limiting
 
-| Export | Description |
-|---|---|
-| `RateLimitState` | `{ limit: number; remaining: number; resetAt: Date }` |
-| `rateLimitHeaders(state)` | `RateLimit-Limit`, `RateLimit-Remaining`, `RateLimit-Reset` — attach to **all** responses on rate-limited endpoints, not just 429s |
-| `retryAfterHeader(seconds)` | `Retry-After` — add on 429 in addition to `rateLimitHeaders` |
-
-### Security and CORS
-
-| Export | Description |
-|---|---|
-| `baselineSecurityHeaders` | `HSTS`, `CSP`, `Referrer-Policy`, `X-Content-Type-Options`, `X-Frame-Options`, `Cache-Control: no-store` — merge into every response |
-| `corsHeaders(allowedOrigins, requestOrigin, opts?)` | Never reflects `Origin` blindly. Returns `{}` for unlisted origins. Always sets `Vary: Origin`. `allowedOrigins` comes from config, never from headers. |
-
-### Idempotency
-
-| Export | Description |
-|---|---|
-| `IdempotencyStore` | Port — `check`, `markInFlight`, `store`. Implement with Redis / Postgres / any durable store. |
-| `IdempotencyLookup` | Union — `first_request \| replay \| in_flight \| key_conflict` |
-| `StoredResponse` | Serialisable response snapshot for replay |
-| `withIdempotency(store)` | `(RawHandler) → RawHandler` HOF — full lifecycle |
-
-### Observability
-
-| Export | Description |
-|---|---|
-| `RequestLogger` | Port — `info(entry)`, `error(entry)`. Implement with pino, winston, etc. |
-| `RequestLog` | Structured log entry type |
-| `withRequestLog(logger, routeTemplate)` | `(RawHandler) → RawHandler` HOF — one entry per request |
-
-### Webhooks
-
-| Export | Description |
-|---|---|
-| `signWebhook(secret, id, body)` | HMAC-SHA256 over `{timestamp}.{body}` → `WebhookSignatureHeaders` |
-| `verifyWebhook(secret, headers, body, maxAge?)` | Verifies signature + timestamp recency (default 5 min). Constant-time comparison. |
-| `WebhookSignatureHeaders` | `x-webhook-id`, `x-webhook-timestamp`, `x-webhook-signature` |
-
-### Cache headers
-
-| Export | Description |
-|---|---|
-| `CachePolicy` | `'no-store' \| 'private-revalidate' \| 'public-short' \| 'public-long' \| 'immutable'` |
-| `cacheHeaders(policy, etag?)` | Builds appropriate `Cache-Control` / `ETag` headers |
-
-### Handler types
-
-| Export | Description |
-|---|---|
-| `RawHandler` | `(req: Request) => Promise<Response>` |
-| `HandlerFactory<Deps>` | `(deps: Deps) => RawHandler` — canonical factory shape |
-
----
-
-## Canonical handler shape
-
 ```ts
-export const createTrackHandler: HandlerFactory<Deps> = (deps) => async (req) => {
-  const ctx = extractContext(req, '/v1/tracks');         // 1. context first
-
-  const raw    = await req.json().catch(() => null);
-  const parsed = schema.safeParse(raw);
-  if (!parsed.success) return apiErrorToResponse(fromZodError(parsed.error), ctx); // 2. validate
-
-  const result = await deps.tracks.create(parsed.data); // 3. use case
-  if (isErr(result)) return apiErrorToResponse(result.error, ctx);
-
-  return createdResponse(result.value, `/v1/tracks/${result.value.id}`, {
-    'X-Request-Id': ctx.traceId,
-  });                                                    // 4. respond
-};
+// Attach to ALL responses on rate-limited endpoints, not just 429s
+okResponse(body, rateLimitHeaders(state))
 ```
 
-## Middleware composition via `pipe`
-
-Compose outermost-last. `withRequestLog` must be outermost so it captures every outcome including idempotency replays.
+### Security
 
 ```ts
-const handler: RawHandler = pipe(
-  createTrackHandler(deps),               // innermost: business logic
-  withIdempotency(idempotencyStore),      // middle: replay / in-flight guard
-  withRequestLog(logger, '/v1/tracks'),   // outermost: structured log
-);
+// Merge into every response
+okResponse(body, { ...baselineSecurityHeaders, ...corsHeaders(allowedOrigins, requestOrigin) })
+// corsHeaders never reflects Origin blindly; allowedOrigins from config only
 ```
 
-## Custom error extension pattern
+### Idempotency + observability
 
 ```ts
-type AppError = ApiError | QuotaExceededError;
-
-const appErrorToResponse: ErrorMapper<AppError> = (error, ctx) => {
-  switch (error.kind) {
-    case 'quota_exceeded':
-      return problemResponse(mkProblem(429, 'quota_exceeded', '...', ctx.traceId));
-    default:
-      return apiErrorToResponse(error, ctx); // delegate canonical variants
-  }
-};
+pipe(handler, withIdempotency(store), withRequestLog(logger, '/v1/orders'))
+// withRequestLog always outermost — logs replays too
 ```
+
+### Configuration
+
+```ts
+import { loadConfig, type ConfigError } from '@tsfpp/boundary'
+const result = loadConfig(zodSchema, process.env)  // Result<T, ConfigError>
+```
+
+### Node.js dev adapter
+
+```ts
+import { createNodeAdapter } from '@tsfpp/boundary'
+
+const server = createNodeAdapter(
+  pipe(appHandler, withRequestLog(logger, '/')),
+  { port: config.server.port, logger },
+)
+server.listen()   // registers SIGINT/SIGTERM
+// await server.close()  // graceful shutdown
+```
+
+Dev/test only. In production use a Fetch-native runtime (Hono, Bun.serve, Deno.serve).
