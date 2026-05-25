@@ -1,0 +1,10 @@
+description: Targeted review of API boundary code against @tsfpp/boundary patterns and the API coding standard. Faster than a full audit — no report file, inline findings only.
+name: TSF++ boundary review
+argument-hint: "File(s) or directory to review, e.g. src/routes/tracks.ts"
+agent: agent
+tools:
+  - read
+  - search/codebase
+  - search/textSearch
+  - search/usages
+  - vscode/askQuestions

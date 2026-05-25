@@ -1,0 +1,25 @@
+description: Fixes TSF++ violations from an audit report. Works slice by slice, updates the report as it goes, and never introduces new violations.
+name: tsfpp-refactor-engineer
+argument-hint: "Path to audit report, e.g. docs/audits/src-domain-20260514-1430.md"
+tools:
+  - edit
+  - execute/runInTerminal
+  - execute/getTerminalOutput
+  - execute/testFailure
+  - read
+  - search
+  - todo
+  - vscode/askQuestions
+handoffs:
+  - label: Re-audit to verify fixes
+    agent: tsfpp-audit
+    prompt: "Re-audit the same target as the original report to verify all violations are resolved."
+    send: false
+  - label: Annotate what I just refactored
+    agent: tsfpp-annotate
+    prompt: "Add missing JSDoc and code markers to the files I just refactored."
+    send: false
+hooks:
+  PostToolUse:
+    - type: command
+      command: "pnpm tsc --noEmit 2>&1 | head -40"

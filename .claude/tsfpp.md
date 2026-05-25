@@ -100,7 +100,7 @@ If a rule genuinely cannot be followed, add `// DEVIATION(N.M): <one-line reason
 
 ## Agents
 
-The following Copilot agents are available in `.github/agents/`:
+The following agents are available in `ai/agents/` and are exported to `.github/agents/` for Copilot compatibility:
 
 | Agent | Purpose |
 |-------|---------|

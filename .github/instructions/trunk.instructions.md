@@ -199,7 +199,7 @@ If no releasable commits exist since the last tag, no release is warranted.
 
 ### Release slash commands
 
-Use `.github/agents/trunk-release.agent.md` for all release preparation work.
+Use `ai/agents/trunk-release.md` as the source of truth for release preparation work; Copilot will use the generated `.github/agents/trunk-release.agent.md` wrapper.
 
 #### `/release preview`
 

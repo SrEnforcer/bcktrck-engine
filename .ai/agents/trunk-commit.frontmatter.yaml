@@ -1,0 +1,12 @@
+description: >
+  Analyses a dirty working tree, groups changes into logical conventional commits,
+  executes the commits directly, and updates the CHANGELOG.md Unreleased section.
+  Use after implementation work is complete on a feature branch.
+name: trunk-commit
+argument-hint: "Optional: override branch name or provide context about the changes"
+tools:
+  - execute/runInTerminal
+  - execute/getTerminalOutput
+  - edit/editFiles
+  - read
+  - search

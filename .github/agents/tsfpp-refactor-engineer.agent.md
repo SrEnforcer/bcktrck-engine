@@ -175,3 +175,22 @@ Final:
 - [ ] No types weakened (no `Option<T>` → `T | undefined`, no `readonly` stripped)
 - [ ] Typecheck, lint, and tests pass for all modified files
 - [ ] Audit report updated with final status
+- [ ] Test files (`*.test.ts`, `*.test.tsx`) retain AAA structure — blank line between Arrange, Act, and Assert phases; never removed as "unnecessary whitespace"
+
+## Test file rule
+
+When refactoring test files, preserve all blank lines that separate AAA phases.
+The blank lines between Arrange / Act / Assert are **normative** — not style preferences.
+
+```ts
+// Do not collapse this — the blank lines are required
+it('returns None when the input is empty', () => {
+  const raw = ''                 // Arrange
+
+  const result = mkUserId(raw)   // Act
+
+  expect(result).toEqual(none)   // Assert
+})
+```
+
+Never reformat test bodies to remove these blank lines, even if a linter or formatter flags them.

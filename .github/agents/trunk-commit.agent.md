@@ -201,6 +201,48 @@ Next: push and open a PR when ready.
 
 ---
 
+## §7 — Push and open PR
+
+After the changelog commit, push the branch and open a PR:
+
+```sh
+git push -u origin <branch>
+```
+
+Then open a PR via the GitHub CLI:
+
+```sh
+gh pr create \
+  --title "<type>(<scope>): <subject from first commit>" \
+  --body "$(cat <<'EOF'
+## Summary
+
+<one paragraph describing the changes — derive from the commit messages>
+
+## Commits
+
+$(git log --oneline origin/HEAD..HEAD 2>/dev/null || git log --oneline -10)
+
+## Checklist
+- [ ] Tests pass
+- [ ] Typecheck passes
+- [ ] CHANGELOG.md updated
+EOF
+)" \
+  --base main
+```
+
+If `gh` is not available, report the push success and print the URL to create a PR manually:
+
+```
+Push successful. Open a PR at:
+https://github.com/<owner>/<repo>/compare/<branch>?expand=1
+```
+
+If `git push` fails because the remote does not exist yet, report clearly and stop — do not attempt `git remote add`.
+
+---
+
 ## Rules
 
 - Execute commits — never suggest commands for the developer to run
@@ -210,4 +252,8 @@ Next: push and open a PR when ready.
 - Never amend a commit that has already been pushed
 - If `git add -p` (partial staging) would be needed to correctly split a single file into multiple commits, note this in the plan and ask the developer to stage those lines manually before proceeding with that specific commit
 - If the working tree contains merge conflicts, stop and report — do not attempt to resolve them
-- If `pnpm typecheck` or `pnpm lint` has not been run since the last change, run them before committing and report the result
+- Before committing, check which scripts exist and run only those:
+  ```sh
+  node -e "const p=require('./package.json'); console.log(Object.keys(p.scripts||{}).join(' '))"
+  ```
+  Run `pnpm typecheck` only if the script exists. Run `pnpm lint` only if the script exists. Report results or "script not found — skipped".

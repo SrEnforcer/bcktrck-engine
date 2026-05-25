@@ -1,0 +1,8 @@
+name: annotation-standard
+description: >
+  Normative TSF++ annotation rules for all comments, JSDoc blocks, module
+  headers, code markers, and deviation records. Load when writing, reviewing,
+  or adding annotations to any TypeScript file: the "why not what" principle,
+  JSDoc body content (invariants, rejected alternatives, external contracts,
+  accepted imprecision, performance trade-offs), marker taxonomy with format,
+  DEVIATION pairing, and what must never be annotated.

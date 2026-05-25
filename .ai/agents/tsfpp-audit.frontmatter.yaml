@@ -1,0 +1,20 @@
+description: TSF++ standards compliance auditor. Produces a structured markdown report in docs/audits/ with per-slice checkboxes.
+name: tsfpp-audit
+argument-hint: "target=<path|package|layer> focus=<all|types|boundary|complexity|loc|annotations|security|react|data|prelude|test|log|config>"
+tools:
+  - edit/createFile
+  - edit/editFiles
+  - execute/runInTerminal
+  - read
+  - search
+  - todo
+  - vscode/askQuestions
+handoffs:
+  - label: Fix violations with Refactor Engineer
+    agent: tsfpp-refactor-engineer
+    prompt: "Fix the TSF++ violations found in the latest audit report in docs/audits/. Work slice by slice."
+    send: false
+  - label: Annotate remaining TODOs
+    agent: tsfpp-annotate
+    prompt: "Add missing JSDoc and code markers to the files listed in the audit report."
+    send: false

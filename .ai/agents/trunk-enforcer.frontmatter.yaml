@@ -1,0 +1,17 @@
+description: Strict trunk-based development enforcer. Guides the full branch-to-PR pipeline, validates commits, and refuses to proceed when invariants are violated.
+name: trunk-enforcer
+argument-hint: "Command: /start-work | /checkpoint | /sync | /open-pr | /hotfix | /feature-lifecycle"
+tools:
+  - execute/runInTerminal
+  - execute/getTerminalOutput
+  - read
+  - vscode/askQuestions
+handoffs:
+  - label: Start coding (guarded)
+    agent: tsfpp-guarded-coding
+    prompt: "Implement the feature on the current branch following TSF++ constraints."
+    send: false
+  - label: Audit before PR
+    agent: tsfpp-audit
+    prompt: "Audit all files changed in this branch for TSF++ compliance. Focus: all."
+    send: false

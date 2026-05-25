@@ -1,0 +1,9 @@
+name: prelude-api
+description: >
+  Provides the complete API surface of @tsfpp/prelude: all exported combinators,
+  ADTs, and utility functions for Option, Result, List, ReadonlyMap, ReadonlySet,
+  branded types, and record decoding. Load this skill when writing or reviewing
+  TypeScript that imports from @tsfpp/prelude, when choosing between
+  map/flatMap/traverseArray, when constructing or querying ReadonlyMap or
+  ReadonlySet, when decoding unknown runtime values, or when deciding between
+  pipe and flow.

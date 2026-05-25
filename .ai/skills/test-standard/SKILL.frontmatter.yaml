@@ -1,0 +1,8 @@
+name: test-standard
+description: >
+  Normative TSF++ testing rules and idioms for all test files. Load when writing
+  or reviewing *.test.ts or *.test.tsx files: toolchain per layer (Vitest,
+  fast-check, RTL, MSW, testcontainers), AAA structure, property-based test
+  patterns, in-memory port stubs, factory conventions, coverage requirements,
+  and forbidden patterns (data-testid, vi.fn() for ports, snapshot tests,
+  implementation assertions). Load alongside prelude-api when writing core tests.

@@ -1,0 +1,7 @@
+name: log-standard
+description: >
+  Normative TSF++ logging rules. Load when writing or reviewing any code that
+  logs, uses the Logger port, implements a logger adapter, or calls tap/tapErr
+  for side effects: Logger port from @tsfpp/prelude, LogEntry field conventions,
+  log level semantics, structured message format, what never to log (PII,
+  secrets, stack traces), withRequestLog for HTTP, silentLogger for tests.

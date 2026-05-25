@@ -1,0 +1,1 @@
+applyTo: "{**/routes/**,**/handlers/**,**/api/**}/*.ts"

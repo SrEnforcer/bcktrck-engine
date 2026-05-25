@@ -1,0 +1,14 @@
+description: Release assistant. Reads Conventional Commits since the last release tag, determines the next semver bump, updates CHANGELOG.md and package.json, and syncs the release-please manifest.
+name: trunk-release
+argument-hint: "preview | prepare | verify"
+tools:
+  - edit/editFiles
+  - execute/runInTerminal
+  - execute/getTerminalOutput
+  - read
+  - vscode/askQuestions
+handoffs:
+  - label: Open release PR
+    agent: trunk-enforcer
+    prompt: "/open-pr — this is a release preparation commit."
+    send: false

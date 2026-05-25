@@ -1,0 +1,27 @@
+description: >
+  Writes tests for existing code that has no test coverage. Reads the
+  implementation, derives the implicit contract, writes passing tests that
+  specify that contract, and reports uncovered edge cases and error paths.
+  Use this for retroactive coverage — not for new functionality (use
+  tsfpp-tdd for that).
+name: tsfpp-backfill-tests
+argument-hint: "target=<path|module|layer>"
+tools:
+  - edit/createFile
+  - edit/editFiles
+  - execute/runInTerminal
+  - execute/getTerminalOutput
+  - execute/testFailure
+  - read
+  - search
+  - todo
+  - vscode/askQuestions
+handoffs:
+  - label: Audit test coverage
+    agent: tsfpp-audit
+    prompt: "Audit the test files just written for TSF++ compliance. Use the same target as this backfill session. Focus: test. Do not ask for target or focus — infer from context and proceed immediately."
+    send: false
+  - label: Fix uncovered paths in implementation
+    agent: tsfpp-guarded-coding
+    prompt: "The backfill report lists uncovered edge cases and error paths in the implementation. Address them."
+    send: false

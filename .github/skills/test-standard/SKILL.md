@@ -223,6 +223,33 @@ const makeTrack = (overrides: Partial<Track> = {}): Track => ({
 
 ---
 
+## Option and Result assertions
+
+Never use `if (isSome(...))` or `if (isOk(...))` as guards — this is branching and produces a test that passes silently when the value is absent.
+
+```ts
+// Bad — branching, silently passes if None
+if (isSome(result.name)) {
+  expect(result.name.value).toBe('Alice')
+}
+
+// Bad — branching, silently passes if Err
+if (isOk(result)) {
+  expect(result.value.id).toBe('usr-001')
+}
+
+// Good — assert on the full value, fails correctly if None/Err
+expect(result.name).toEqual(some('Alice'))
+expect(result).toEqual(ok({ id: 'usr-001', name: 'Alice' }))
+
+// Good — multiple Option fields, no branching
+expect(record.components.artikel).toEqual(some('5'))
+expect(record.components.lid).toEqual(some('1'))
+expect(record.components.onderdeel).toEqual(some('b'))
+```
+
+---
+
 ## Never
 
 | Forbidden | Use instead |
@@ -236,3 +263,9 @@ const makeTrack = (overrides: Partial<Track> = {}): Track => ({
 | Snapshot tests for components or API shape | Explicit assertions |
 | Shallow rendering | RTL full render |
 | Access non-exported symbols | Test through the public API |
+| `if (isSome(...))` / `if (isOk(...))` guards | `toEqual(some(...))` / `toEqual(ok(...))` |
+| `forEach` / `.map()` in test bodies | Separate `it` block per case |
+| `toBeTruthy()` / `toBeFalsy()` | `toBe(true)` / `toBe(false)` or `toEqual(some(...))` |
+| `expect(x).toBeDefined()` | `toEqual(some(...))` or explicit value assertion |
+| Unawaited async assertions | Always `await` async `expect` or use `resolves` |
+| `it.only` / `describe.only` committed | Only in local debugging, never committed |

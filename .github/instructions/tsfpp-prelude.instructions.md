@@ -21,8 +21,6 @@ import {
   map, flatMap, flatMapAsync, tap, tapErr,
   // Async adapters
   tryCatch, tryCatchAsync,
-  // Traversal
-  traverseArray, traverseArrayO, sequenceArrayO,
   // Unknown decoding
   isRecord, fromUnknownString, fromUnknownArray, fromUnknownArrayOf, fromNonEmptyString,
   getStringField, getNumberField, getBooleanField, getTypedField,
@@ -30,15 +28,16 @@ import {
   intoMap, entriesOfMap, assoc, dissoc, lookup,
   // ReadonlySet
   intoSet, conj, disj, member,
-  // List
-  fromArray, toArray, cons, nil, isCons, isNil,
+  // Traversal
+  traverseArray, traverseArrayO, sequenceArrayO, unique,
   // Pipe
   pipe, flow, comp, complement,
   // Utilities
-  absurd, unique,
+  absurd,
+  // Logger port
+  type Logger, type LogEntry, type LogLevel,
   // Types
-  type Option, type Result, type Unit, type Brand,
-  type UnknownRecord,
+  type Option, type Result, type Unit, type Brand, type UnknownRecord,
 } from '@tsfpp/prelude'
 ```
 
@@ -50,18 +49,15 @@ Never `import from 'ramda'`.
 const a: Option<number> = some(42)
 const b: Option<number> = none
 
-// Guard before accessing .value
-if (isSome(opt)) opt.value   // safe
-if (isNone(opt)) return ...  // early exit
+if (isSome(opt)) opt.value    // safe
+if (isNone(opt)) return ...   // early exit
 
-// Transform
 pipe(opt, mapO(n => n + 1))
 pipe(opt, flatMapO(n => n > 0 ? some(n) : none))
 pipe(opt, getOrElse(() => 0))          // collapse to value
 pipe(opt, orElse(() => some(fallback))) // keep Option context
 
-// Lift from nullable — never use if (x === null) directly
-const opt = fromNullable(maybeNull)  // null | undefined → Option<T>
+const opt = fromNullable(maybeNull)    // null | undefined → Option<T>
 ```
 
 ## Result\<T, E\>
@@ -70,29 +66,21 @@ const opt = fromNullable(maybeNull)  // null | undefined → Option<T>
 const r: Result<number, string> = ok(42)
 const e: Result<number, string> = err('oops')
 
-// Guard before accessing .value / .error
-if (isOk(r))  r.value   // T
-if (isErr(r)) r.error   // E
+if (isOk(r))  r.value
+if (isErr(r)) r.error
 
-// Transform
 pipe(r, map(v => v + 1))
 pipe(r, flatMap(v => v > 0 ? ok(v) : err('non-positive')))
 
 // Side effects — never break the pipe chain for logging
 pipe(r,
-  tap(v  => log.debug({ v })),
-  tapErr(e => log.warn({ e })),
+  tap(v    => logger.debug({ message: 'parsed', traceId })),
+  tapErr(e => logger.error({ message: 'parse.failed', code: e.code, traceId })),
 )
 
-// Wrapping throwing code — never use raw try/catch in core
-const result = tryCatch(
-  () => JSON.parse(raw),
-  e  => `parse error: ${String(e)}`,
-)
-const result = await tryCatchAsync(
-  () => db.findById(id),
-  e  => mkDbError(e),
-)
+// Wrapping throwing code
+const result = tryCatch(() => JSON.parse(raw), e => `parse error: ${String(e)}`)
+const result = await tryCatchAsync(() => db.findById(id), e => mkDbError(e))
 ```
 
 ## Result\<Unit, E\> for no-value success
@@ -102,25 +90,27 @@ const result = await tryCatchAsync(
 const save = (): Result<Unit, DbError> => ok(unit)
 ```
 
-## pipe vs flow
-
-```ts
-// pipe — value at hand
-const result = pipe(input, mapO(transform), getOrElse(() => fallback))
-
-// flow — reusable pipeline, returns a function
-const process = flow(mapO(transform), getOrElse(() => fallback))
-const result  = process(input)
-```
-
 ## absurd — exhaustiveness witness
 
 ```ts
-switch (result._tag) {
-  case 'Ok':  return result.value
-  case 'Err': return result.error
-  default:    return absurd(result)
+switch (x.kind) {
+  case 'a': return handleA(x)
+  case 'b': return handleB(x)
+  default:  return absurd(x)  // compile error if a variant is unhandled
 }
+```
+
+## Branded types — smart constructor pattern
+
+```ts
+// Never brand() — use Brand type + smart constructor
+type UserId = Brand<string, 'UserId'>
+
+const mkUserId = (raw: string): Option<UserId> =>
+  raw.length > 0
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- DEVIATION(1.6): smart-constructor body
+    ? some(raw as UserId)
+    : none
 ```
 
 ## Unknown record decoding
@@ -128,11 +118,11 @@ switch (result._tag) {
 ```ts
 import { isRecord, getStringField, getNumberField, getTypedField } from '@tsfpp/prelude'
 
-const decode = (raw: unknown): Result<Foo, string> => {
+const decode = (raw: unknown): Result<User, string> => {
   if (!isRecord(raw)) return err('not an object')
   const name = getStringField(raw, 'name')        // Option<string> — rejects empty/whitespace
   const age  = getNumberField(raw, 'age')         // Option<number> — rejects NaN/Infinity
-  const id   = getTypedField(raw, 'id', isFooId)  // Option<FooId> — custom guard
+  const id   = getTypedField(raw, 'id', isUserId) // Option<UserId> — custom guard
   return isSome(name) && isSome(age) && isSome(id)
     ? ok({ name: name.value, age: age.value, id: id.value })
     : err('missing or invalid fields')
@@ -143,31 +133,25 @@ const decode = (raw: unknown): Result<Foo, string> => {
 
 ```ts
 // Fallible map — short-circuits on first Err
-const all = traverseArray(parseFoo)(rawItems) // Result<ReadonlyArray<Foo>, E>
+const all = traverseArray(parseFoo)(rawItems)  // Result<ReadonlyArray<Foo>, E>
 // Never: rawItems.map(parseFoo) — produces ReadonlyArray<Result<Foo,E>>
 
 // Option traversal — None if any element is None
 traverseArrayO(fromNullable)([1, 2, 3])    // Some([1, 2, 3])
 traverseArrayO(fromNullable)([1, null, 3]) // None
 
-// Already have ReadonlyArray<Option<A>>?
-sequenceArrayO([some(1), some(2)]) // Some([1, 2])
-sequenceArrayO([some(1), none])    // None
-
 // Guard typed arrays from unknown
-const strings = fromUnknownArrayOf(
-  (v): v is string => typeof v === 'string'
-)(raw) // Option<ReadonlyArray<string>>
+const strings = fromUnknownArrayOf((v): v is string => typeof v === 'string')(raw)
 ```
 
 ## ReadonlyMap
 
 ```ts
 // Never new Map()
-const m  = intoMap([['a', 1], ['b', 2]])  // ReadonlyMap<string, number>
+const m  = intoMap([['a', 1], ['b', 2]])
 const v  = pipe(m, lookup('a'))           // Some(1)
-const m2 = pipe(m, assoc('c', 3))         // insert / replace
-const m3 = pipe(m2, dissoc('a'))          // remove
+const m2 = pipe(m, assoc('c', 3))
+const m3 = pipe(m2, dissoc('a'))
 const es = entriesOfMap(m)                // ReadonlyArray<readonly [string, number]>
 ```
 
@@ -175,15 +159,45 @@ const es = entriesOfMap(m)                // ReadonlyArray<readonly [string, num
 
 ```ts
 // Never new Set()
-const s   = intoSet([1, 2, 2, 3])  // ReadonlySet<number> — {1, 2, 3}
-const s2  = pipe(s, conj(4))       // add
-const s3  = pipe(s2, disj(2))      // remove (no-op when absent)
-const has = pipe(s, member(1))     // true
+const s   = intoSet([1, 2, 2, 3])   // {1, 2, 3}
+const s2  = pipe(s, conj(4))
+const s3  = pipe(s2, disj(2))
+const has = pipe(s, member(1))       // true
+```
+
+## Logger port
+
+```ts
+// Logger, LogEntry, LogLevel are defined in @tsfpp/prelude
+// Inject as a dependency — never import pino/winston directly in core/use-case/DAL
+
+type Deps = { readonly logger: Logger }
+
+pipe(
+  result,
+  tap(v    => deps.logger.info({ message: 'user.created', userId: v.id, traceId })),
+  tapErr(e => deps.logger.error({ message: 'user.create.failed', code: e.code, traceId })),
+)
+
+// Infrastructure adapter
+export const logger: Logger = {
+  debug: (entry) => pinoInstance.debug(entry, entry.message),
+  info:  (entry) => pinoInstance.info(entry, entry.message),
+  warn:  (entry) => pinoInstance.warn(entry, entry.message),
+  error: (entry) => pinoInstance.error(entry, entry.message),
+}
+
+// Silent logger for tests
+export const silentLogger: Logger = {
+  debug: () => undefined,
+  info:  () => undefined,
+  warn:  () => undefined,
+  error: () => undefined,
+}
 ```
 
 ## Discriminant convention
 
-| ADT origin | Field | Access |
-|---|---|---|
-| `@tsfpp/prelude` (Result, Option) | `_tag` | **via guards only** — never `x._tag === 'Ok'` |
-| Domain ADTs | `kind` | `switch (x.kind)` with `absurd` |
+- Prelude ADTs (`Option`, `Result`) use `_tag` internally — **never access directly**
+- Use exported guards: `isSome`, `isNone`, `isOk`, `isErr`
+- Domain ADTs use `kind` as discriminant

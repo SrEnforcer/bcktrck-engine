@@ -1,0 +1,8 @@
+name: coding-standard
+description: >
+  Normative TSF++ coding rules for all TypeScript in this repository. Load when
+  writing, reviewing, or auditing any TypeScript file: enforces forbidden
+  constructs, hard rules by rule number, layer-specific constraints (core, api,
+  dal, react, cli), discriminant conventions (_tag vs kind), deviation procedure,
+  and size limits. Supersedes general TypeScript conventions wherever they
+  conflict.
