@@ -1,4 +1,4 @@
-import { intoMap } from '@tsfpp/prelude'
+import { intoMap, none } from '@tsfpp/prelude'
 import { describe, expect, it } from 'vitest'
 import { renderSvgProjection } from './sections'
 import { mkRenderSvgInput } from '../../tests/factories/render-svg-slice'
@@ -17,7 +17,7 @@ describe('renderSvgProjection', () => {
       tree: {
         rootId: 'root',
         nodes: intoMap([
-          ['root', { id: 'root', kind: 'employee', label: 'Root', depth: 0, parentId: null, childIndex: 0, children: [], staffLeft: [], staffRight: [] }]
+          ['root', { id: 'root', kind: 'employee', label: 'Root', depth: 0, parentId: none, childIndex: 0, children: [], staffLeft: [], staffRight: [] }]
         ])
       },
       placed: {

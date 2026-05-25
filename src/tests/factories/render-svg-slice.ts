@@ -6,7 +6,7 @@
  * @packageDocumentation
  */
 
-import { intoMap } from '@tsfpp/prelude'
+import { intoMap, none } from '@tsfpp/prelude'
 import type { IconSpec } from '../../icons/render'
 import type { ResolvedNodeStyle, ResolvedTextStyles } from '../../style/dsl'
 import { asNodeId } from '../../types/branded'
@@ -79,7 +79,7 @@ export const mkShadowFixtures = (): {
   tree: {
     rootId: 'root',
     nodes: intoMap([
-      ['root', { id: 'root', kind: 'employee', label: 'Root\nLead', depth: 0, parentId: null, childIndex: 0, children: [], staffLeft: [], staffRight: [] }]
+      ['root', { id: 'root', kind: 'employee', label: 'Root\nLead', depth: 0, parentId: none, childIndex: 0, children: [], staffLeft: [], staffRight: [] }]
     ])
   },
   placed: {

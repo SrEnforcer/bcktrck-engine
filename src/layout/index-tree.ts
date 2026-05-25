@@ -12,7 +12,8 @@
 
 import type { DeptId, NodeId } from '../types/branded'
 import type { OrgNode, OrgTree } from '../types/org-tree'
-import { fromNullable, intoMap, isNone } from '@tsfpp/prelude'
+import type { Option } from '@tsfpp/prelude'
+import { fromNullable, intoMap, isNone, none, some } from '@tsfpp/prelude'
 import type { IndexedNode, IndexedTree, LayoutNodeKind } from './types'
 
 /** Extracts the raw string id from a branded NodeId or DeptId. */
@@ -24,7 +25,7 @@ type WalkResult = {
 }
 
 type WalkContext = {
-  readonly parentId: string | null
+  readonly parentId: Option<string>
   readonly depth: number
   readonly childIndex: number
 }
@@ -127,7 +128,7 @@ const createIndexedNodeBase = (
     readonly kind: LayoutNodeKind
     readonly label: string
     readonly depth: number
-    readonly parentId: string | null
+    readonly parentId: Option<string>
     readonly childIndex: number
     readonly children: readonly string[]
     readonly staffLeft: readonly string[]
@@ -159,7 +160,7 @@ const walkChildren = (
   children.reduce(
     (acc, child, i) => mergeWalkResults(acc, walkNode({
       node: child,
-      context: { parentId, depth: depth + 1, childIndex: i }
+      context: { parentId: some(parentId), depth: depth + 1, childIndex: i }
     })),
     emptyWalkResult()
   )
@@ -266,7 +267,7 @@ const walkNode = (input: WalkNodeInput): WalkResult => {
 export const indexTree = (orgTree: OrgTree): IndexedTree => {
   const result = walkNode({
     node: orgTree.root,
-    context: { parentId: null, depth: 0, childIndex: 0 }
+    context: { parentId: none, depth: 0, childIndex: 0 }
   })
   return { rootId: toId(orgTree.root.id), nodes: result.nodes, staffLabels: result.staffLabels }
 }

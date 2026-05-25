@@ -1,4 +1,4 @@
-import { intoMap, intoSet } from '@tsfpp/prelude'
+import { intoMap, intoSet, none } from '@tsfpp/prelude'
 import { describe, expect, it } from 'vitest'
 import type { RenderConfig } from '../types'
 import { buildStaffParentLookup, renderNodeBodies, renderStaffBodies } from './nodes'
@@ -36,7 +36,7 @@ const tree = {
       kind: 'employee' as const,
       label: 'Root',
       depth: 0,
-      parentId: null,
+      parentId: none,
       childIndex: 0,
       children: [],
       staffLeft: ['staff-left'],

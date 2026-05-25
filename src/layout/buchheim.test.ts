@@ -1,4 +1,4 @@
-import { fromNullable, getOrElse, intoMap } from '@tsfpp/prelude'
+import { fromNullable, getOrElse, intoMap, none, some } from '@tsfpp/prelude'
 import { describe, expect, it } from 'vitest'
 import type { IndexedTree } from './types'
 import { buchheim } from './buchheim'
@@ -11,7 +11,7 @@ const singleNodeTree = (): IndexedTree => ({
       kind: 'employee',
       label: 'Root',
       depth: 0,
-      parentId: null,
+      parentId: none,
       childIndex: 0,
       children: [],
       staffLeft: [],
@@ -28,7 +28,7 @@ const twoChildrenTree = (): IndexedTree => ({
       kind: 'employee',
       label: 'Root',
       depth: 0,
-      parentId: null,
+      parentId: none,
       childIndex: 0,
       children: ['a', 'b'],
       staffLeft: [],
@@ -39,7 +39,7 @@ const twoChildrenTree = (): IndexedTree => ({
       kind: 'employee',
       label: 'A',
       depth: 1,
-      parentId: 'root',
+      parentId: some('root'),
       childIndex: 0,
       children: [],
       staffLeft: [],
@@ -50,7 +50,7 @@ const twoChildrenTree = (): IndexedTree => ({
       kind: 'employee',
       label: 'B',
       depth: 1,
-      parentId: 'root',
+      parentId: some('root'),
       childIndex: 1,
       children: [],
       staffLeft: [],

@@ -6,7 +6,7 @@
  * @packageDocumentation
  */
 
-import { fromNullable, getOrElse, intoMap, isNone } from '@tsfpp/prelude'
+import { fromNullable, getOrElse, intoMap, isNone, none, some } from '@tsfpp/prelude'
 import type { IndexedNode, IndexedTree, LayoutPoint, PlacedTree, RenderConfig } from '../../layout/types'
 import { asDeptId, asNodeId } from '../../types/branded'
 import type { OrgNode, OrgTree } from '../../types/org-tree'
@@ -54,7 +54,7 @@ const mkApplyHintRootNode = (input: {
   kind: 'employee',
   label: 'Root',
   depth: 0,
-  parentId: null,
+  parentId: none,
   childIndex: 0,
   children: input.children,
   staffLeft: [],
@@ -70,7 +70,7 @@ const mkApplyHintChildNode = (input: {
   kind: 'employee',
   label: input.id,
   depth: 1,
-  parentId: 'root',
+  parentId: some('root'),
   childIndex: input.index,
   children: [],
   staffLeft: [],
@@ -106,14 +106,14 @@ export const mkRouteEdgesTree = (layoutHint: IndexedNode['layoutHint']): Indexed
       kind: 'employee',
       label: 'Root',
       depth: 0,
-      parentId: null,
+      parentId: none,
       childIndex: 0,
       children: ['child'],
       staffLeft: [],
       staffRight: [],
       ...optionalLayoutHint(layoutHint)
     }],
-    ['child', { id: 'child', kind: 'employee', label: 'Child', depth: 1, parentId: 'root', childIndex: 0, children: [], staffLeft: [], staffRight: [] }]
+    ['child', { id: 'child', kind: 'employee', label: 'Child', depth: 1, parentId: some('root'), childIndex: 0, children: [], staffLeft: [], staffRight: [] }]
   ])
 })
 
@@ -166,7 +166,7 @@ export const mkStaffPlacementTree = (): IndexedTree => ({
       kind: 'employee',
       label: 'Root',
       depth: 0,
-      parentId: null,
+      parentId: none,
       childIndex: 0,
       children: [],
       staffLeft: ['left-a', 'left-b'],
