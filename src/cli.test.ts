@@ -70,4 +70,15 @@ describe('runCli file and compile outcomes', () => {
     expect(exitCode).toBe(0)
     expect(capture.stdoutSpy.mock.calls.flat().join('')).toContain('<svg />')
   })
+
+  it('prints build marker comment when --build-info is enabled', async () => {
+    const capture = mkCliIoCapture(async () => 'org "X"')
+
+    const exitCode = await runCli(['--build-info', 'input.btl'], capture.io)
+
+    expect(exitCode).toBe(0)
+    const output = capture.stdoutSpy.mock.calls.flat().join('')
+    expect(output).toContain('bcktrck-build: routing-obstacle-fix-2026-05-25')
+    expect(output).toContain('<svg />')
+  })
 })

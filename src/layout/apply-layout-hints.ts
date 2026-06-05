@@ -11,7 +11,7 @@ import { fromNullable, getOrElse, intoMap, isNone } from '@tsfpp/prelude'
 import type { IndexedNode, IndexedTree, LayoutPoint, PlacedTree } from './types'
 
 // DEVIATION(2.4): Layout hint placement logic remains in one module until lane and shift helpers are extracted.
-// NOTE(unknown, 2026-05-18): Hanging-branch compaction intentionally remains local until lane and subtree-span helpers are split.
+/* eslint-disable max-lines */
 
 type LaneAndSideResult = {
   readonly lane: number
@@ -71,6 +71,8 @@ type CompactBranchesInput = {
   readonly positions: ReadonlyMap<string, LayoutPoint>
   readonly subtreeHasHanging: ReadonlyMap<string, boolean>
 }
+
+type StaffRowShiftInput = { readonly nodeId: string; readonly tree: IndexedTree; readonly inheritedShift: number }
 
 type ApplyNodeHintState = {
   readonly positions: ReadonlyMap<string, LayoutPoint>
@@ -428,6 +430,37 @@ const compactBranches = (input: CompactBranchesInput): ReadonlyMap<string, Layou
   return input.positions
 }
 
+const reservesStaffRow = (node: IndexedNode, staffRowHostIds: ReadonlyArray<string>): boolean =>
+  node.children.length > 0
+  && (node.staffLeft.length > 0 || node.staffRight.length > 0 || staffRowHostIds.includes(node.id))
+
+const collectStaffRowShifts = (input: StaffRowShiftInput & { readonly staffRowHostIds: ReadonlyArray<string> }): ReadonlyArray<readonly [string, number]> => {
+  const node = input.tree.nodes.get(input.nodeId)
+  const nodeOption = fromNullable(node)
+  if (isNone(nodeOption)) {
+    return []
+  }
+  const ownShift = input.inheritedShift
+  const nextInheritedShift = ownShift + (reservesStaffRow(nodeOption.value, input.staffRowHostIds) ? 1 : 0)
+  return [
+    [input.nodeId, ownShift],
+    ...nodeOption.value.children.flatMap((childId) => collectStaffRowShifts({
+      nodeId: childId,
+      tree: input.tree,
+      inheritedShift: nextInheritedShift,
+      staffRowHostIds: input.staffRowHostIds
+    }))
+  ]
+}
+
+const applyStaffRowShift = (positions: ReadonlyMap<string, LayoutPoint>, shiftByNodeId: ReadonlyMap<string, number>): ReadonlyMap<string, LayoutPoint> =>
+  mapFromEntries(
+    Array.from(positions.entries()).map(([nodeId, point]) => {
+      const shift = getOrElse<number>(() => 0)(fromNullable(shiftByNodeId.get(nodeId)))
+      return [nodeId, shift === 0 ? point : { x: point.x, y: point.y + shift }] as const
+    })
+  )
+
 /**
  * Apply hanging-layout hints to a Buchheim-placed tree.
  *
@@ -439,9 +472,21 @@ const compactBranches = (input: CompactBranchesInput): ReadonlyMap<string, Layou
  * @param placed Buchheim placement output (grid coordinates).
  * @returns A new `PlacedTree` with adjusted node positions.
  */
-export const applyLayoutHints = (tree: IndexedTree, placed: PlacedTree): PlacedTree => {
+export const applyLayoutHints = (
+  tree: IndexedTree,
+  placed: PlacedTree,
+  options: { readonly staffRowHostIds?: ReadonlyArray<string> } = {}
+): PlacedTree => {
+  const staffRowHostIds = getOrElse<ReadonlyArray<string>>(() => [])(fromNullable(options.staffRowHostIds))
   const subtreeHasHanging = createSubtreeHangingIndex(tree)
   const hintedPositions = walkPreOrder(tree.rootId, tree, mapClone(placed.positions))
-  const positions = compactBranches({ nodeId: tree.rootId, tree, positions: hintedPositions, subtreeHasHanging })
+  const compactedPositions = compactBranches({ nodeId: tree.rootId, tree, positions: hintedPositions, subtreeHasHanging })
+  const shiftByNodeId = mapFromEntries(collectStaffRowShifts({
+    nodeId: tree.rootId,
+    tree,
+    inheritedShift: 0,
+    staffRowHostIds
+  }))
+  const positions = applyStaffRowShift(compactedPositions, shiftByNodeId)
   return { rootId: placed.rootId, positions }
 }

@@ -79,6 +79,7 @@ const buildProjectionRenderDependencies = (
     staffParentLookup: buildStaffParentLookup(input.tree),
     shadowBoundsMap: buildShadowBoundsMap({
       shadowNodes: input.shadowNodes,
+      tree: input.tree,
       placed: input.placed,
       staff: input.staff,
       cfg: input.cfg,

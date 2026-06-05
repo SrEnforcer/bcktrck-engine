@@ -1,0 +1,337 @@
+defs
+  // role labels
+  $ceo = chief executive officer
+  $coo = chief operating officer
+  $cto = chief technology officer
+  $cfo = chief financial officer
+  $chro = chief people officer
+  $ciso = chief information security officer
+  $vp = vice president
+  $dir = director
+  $mgr = manager
+  $lead = team lead
+  $snr = senior specialist
+  $spc = specialist
+  $ops = operations coordinator
+  $analyst = analyst
+  $engineer = engineer
+  $architect = architect
+  $admin = administrator
+  $legal = legal counsel
+
+  // icon aliases
+  $icon-ceo = crown
+  $icon-fin = hand-coins
+  $icon-tech = cpu
+  $icon-sec = shield
+  $icon-people = users
+  $icon-ops = goal
+  $icon-data = chart-column
+  $icon-research = microscope
+  $icon-sales = presentation
+  $icon-support = headset
+  $icon-compliance = scale
+  $icon-cannabis = cannabis
+
+  // palette
+  $clr-bg-exec = #f3e8ff
+  $clr-border-exec = #6b21a8
+  $clr-bg-tech = #e0f2fe
+  $clr-border-tech = #0369a1
+  $clr-bg-fin = #ecfdf3
+  $clr-border-fin = #047857
+  $clr-bg-ops = #fff7ed
+  $clr-border-ops = #c2410c
+  $clr-bg-sec = #fef2f2
+  $clr-border-sec = #b91c1c
+  $clr-bg-people = #eef2ff
+  $clr-border-people = #3730a3
+  $clr-bg-research = #f0fdf4
+  $clr-border-research = #15803d
+  $clr-bg-sales = #fff1f2
+  $clr-border-sales = #be123c
+  $clr-bg-support = #f8fafc
+  $clr-border-support = #334155
+  $clr-title = #475569
+
+style
+  .kind-department
+    border-style: none
+    background-color: transparent
+    font-size: 16
+    font-weight: 500
+
+  .node
+    icon-size: 15
+    icon-pos: bottom-right
+    icon-opacity: 0.55
+
+  .node-name
+    font-weight: 700
+
+  .node-title
+    color: $clr-title
+    line-spacing: 1.22
+
+  .role-chief-executive-officer
+    background-color: $clr-bg-exec
+    border-color: $clr-border-exec
+    icon-color: $clr-border-exec
+    icon: $icon-ceo
+
+  .role-chief-operating-officer
+    background-color: $clr-bg-ops
+    border-color: $clr-border-ops
+    icon-color: $clr-border-ops
+    icon: $icon-ops
+
+  .role-chief-technology-officer
+    background-color: $clr-bg-tech
+    border-color: $clr-border-tech
+    icon-color: $clr-border-tech
+    icon: $icon-tech
+
+  .role-chief-financial-officer
+    background-color: $clr-bg-fin
+    border-color: $clr-border-fin
+    icon-color: $clr-border-fin
+    icon: $icon-fin
+
+  .role-chief-people-officer
+    background-color: $clr-bg-people
+    border-color: $clr-border-people
+    icon-color: $clr-border-people
+    icon: $icon-people
+
+  .role-chief-information-security-officer
+    background-color: $clr-bg-sec
+    border-color: $clr-border-sec
+    icon-color: $clr-border-sec
+    icon: $icon-sec
+
+  .role-security-architect
+    background-color: #fee2e2
+    border-color: #b91c1c
+    icon-color: #b91c1c
+
+  .role-research-specialist
+    background-color: $clr-bg-research
+    border-color: $clr-border-research
+    icon-color: $clr-border-research
+    icon: $icon-research
+
+  .role-sales-lead
+    background-color: $clr-bg-sales
+    border-color: $clr-border-sales
+    icon-color: $clr-border-sales
+    icon: $icon-sales
+
+  .role-support-lead
+    background-color: $clr-bg-support
+    border-color: $clr-border-support
+    icon-color: $clr-border-support
+    icon: $icon-support
+
+  .role-compliance-counsel
+    background-color: #f1f5f9
+    border-color: #475569
+    icon-color: #475569
+    icon: $icon-compliance
+
+  .role-biotech-regulatory-specialist
+    background-color: #fef3c7
+    border-color: #b45309
+    icon-color: #b45309
+    icon: $icon-cannabis
+
+config
+  company: Aetherion Global Systems
+  region: fictional-eu
+  render-theme: enterprise
+  page-size: a3
+  layout-mode: hanging-both
+
+org "Aetherion Global Systems"
+  ~staff Board Secretariat @boardsec [title: corporate governance office]
+  ~staff Internal Audit @ia [title: enterprise assurance]
+
+  ~dept Executive Office @exec [head: @ceo]
+    Elena Voss @ceo [title: $ceo] [roles: chief-executive-officer]
+      ~staff Marta Ionescu @ea-ceo [title: executive assistant]
+      ~staff Owen Hart @chiefstaff [title: chief of staff]
+
+      Rafiq Elman @coo [title: $coo] [roles: chief-operating-officer]
+        ~dept Global Operations @ops [head: @coo] %hanging-both
+          Mira Santos @vp-ops [title: $vp] [roles: operations-lead]
+            ~dept Supply Chain @ops-supply [head: @vp-ops] %hanging
+              Hugo Dalen @dir-supply [title: $dir] [roles: operations-lead]
+              Alma Chen @mgr-logistics [title: $mgr] [roles: operations-coordinator]
+              Ron Evers @lead-fulfillment [title: $lead] [roles: operations-coordinator]
+              Ida Morel @snr-proc [title: $snr] [roles: procurement-specialist]
+              ~vacant VACANT @vac-supply-analyst [title: $analyst]
+            ~dept Manufacturing Programs @ops-mfg [head: @vp-ops] %hanging
+              Kai Richter @dir-mfg [title: $dir] [roles: operations-lead]
+              Neha Arora @mgr-quality [title: $mgr] [roles: quality-manager]
+              Sven Berg @lead-shift-a [title: $lead] [roles: plant-lead]
+              Irina Pop @lead-shift-b [title: $lead] [roles: plant-lead]
+              Priya Nair @spc-lean [title: $spc] [roles: lean-specialist]
+            ~dept Program Management Office @ops-pmo [head: @vp-ops] %hanging
+              Tomas Klein @dir-pmo [title: $dir] [roles: program-director]
+              Lucia Ferretti @mgr-portfolio [title: $mgr] [roles: portfolio-manager]
+              David Kim @analyst-pmo1 [title: $analyst] [roles: project-controls]
+              Sarah Nguyen @analyst-pmo2 [title: $analyst] [roles: project-controls]
+
+      Nila Drax @cto [title: $cto] [roles: chief-technology-officer]
+        ~dept Technology Division @tech [head: @cto] %hanging-both
+          Petro Ivanov @vp-eng [title: $vp] [roles: engineering-vp]
+            ~dept Platform Engineering @tech-platform [head: @vp-eng] %hanging-both
+              Lian Murphy @mgr-platform [title: $mgr] [roles: platform-manager]
+              Omar Zidane @lead-runtime [title: $lead] [roles: runtime-lead]
+              Ezra Cole @engineer-runtime1 [title: $engineer] [roles: backend-engineer]
+              Mina Park @engineer-runtime2 [title: $engineer] [roles: backend-engineer]
+              Theo Walsh @engineer-runtime3 [title: $engineer] [roles: backend-engineer]
+              ~vacant VACANT @vac-runtime [title: $engineer]
+            ~dept Cloud Infrastructure @tech-cloud [head: @vp-eng] %hanging
+              Paula Mendez @vp-cloud [title: $vp] [roles: cloud-operations-vp]
+              Ken Ito @lead-sre [title: $lead] [roles: sre-lead]
+              Arjun Mehta @sre1 [title: $engineer] [roles: site-reliability-engineer]
+              Beatrice Hall @sre2 [title: $engineer] [roles: site-reliability-engineer]
+              Luca Romano @finops [title: $analyst] [roles: finops-analyst]
+            ~dept Developer Experience @tech-devex [head: @vp-eng] %hanging
+              Mara Jensen @mgr-devex [title: $mgr] [roles: developer-experience-manager]
+              Isaac Flynn @lead-tooling [title: $lead] [roles: tooling-lead]
+              Chiara Bell @spc-ci [title: $spc] [roles: ci-cd-specialist]
+              Evan Rowe @spc-observability [title: $spc] [roles: observability-specialist]
+
+          Sora Kelvin @vp-data [title: $vp] [roles: data-platform-vp]
+            ~dept Data Engineering @tech-data-eng [head: @vp-data] %hanging-both
+              Yvette Long @mgr-data-eng [title: $mgr] [roles: data-engineering-manager]
+              Nolan Cruz @lead-ingestion [title: $lead] [roles: ingestion-lead]
+              Juno Kim @engineer-data1 [title: $engineer] [roles: data-engineer]
+              Daria Holt @engineer-data2 [title: $engineer] [roles: data-engineer]
+              Milos Tan @engineer-data3 [title: $engineer] [roles: data-engineer]
+            ~dept Analytics and BI @tech-bi [head: @vp-data] %hanging
+              Clara Wu @mgr-bi [title: $mgr] [roles: analytics-manager]
+              Rina Sol @lead-bi [title: $lead] [roles: bi-lead]
+              Andre Fox @analyst-bi1 [title: $analyst] [roles: business-analyst]
+              Nadia Kane @analyst-bi2 [title: $analyst] [roles: business-analyst]
+              Joel Rye @analyst-bi3 [title: $analyst] [roles: business-analyst]
+
+          Ilya Grant @vp-research [title: $vp] [roles: research-vp]
+            ~dept Advanced Research Lab @tech-research [head: @vp-research] %hanging-both
+              Vera Lund @mgr-research [title: $mgr] [roles: research-manager]
+              Marko Hale @lead-ml [title: $lead] [roles: ml-lead]
+              Lina Ortiz @spc-ml1 [title: $spc] [roles: research-specialist]
+              Paolo Dean @spc-ml2 [title: $spc] [roles: research-specialist]
+              Edda Pine @spc-ml3 [title: $spc] [roles: research-specialist]
+            ~dept Product Incubation @tech-incubation [head: @vp-research] %hanging
+              Sima Noor @mgr-incubation [title: $mgr] [roles: incubation-manager]
+              Reese Ward @architect-exp [title: $architect] [roles: solution-architect]
+              Tara Hill @analyst-market [title: $analyst] [roles: market-analyst]
+              ~shared Leo March @shared-proto [title: $engineer] [roles: prototype-engineer]
+
+      Marcel Quinn @cfo [title: $cfo] [roles: chief-financial-officer]
+        ~dept Finance and Strategy @finance [head: @cfo] %hanging-both
+          Dana Flores @vp-finance [title: $vp] [roles: finance-vp]
+            ~dept Corporate Accounting @fin-accounting [head: @vp-finance] %hanging
+              Jonas Meyer @dir-accounting [title: $dir] [roles: accounting-director]
+              Keira Moss @mgr-close [title: $mgr] [roles: close-manager]
+              Emil Park @analyst-close1 [title: $analyst] [roles: accounting-analyst]
+              Nora Blake @analyst-close2 [title: $analyst] [roles: accounting-analyst]
+            ~dept Treasury and Risk @fin-treasury [head: @vp-finance] %hanging
+              Rita Cole @dir-treasury [title: $dir] [roles: treasury-director]
+              Pablo Venn @mgr-cash [title: $mgr] [roles: cash-manager]
+              Hana Zhou @analyst-fx [title: $analyst] [roles: fx-analyst]
+              Glenn Pierce @analyst-risk [title: $analyst] [roles: risk-analyst]
+          Aria Noor @vp-strategy [title: $vp] [roles: strategy-vp]
+            ~dept Corporate Strategy @fin-strategy [head: @vp-strategy] %hanging
+              Milan Ko @dir-strategy [title: $dir] [roles: strategy-director]
+              Jace River @analyst-strat1 [title: $analyst] [roles: strategy-analyst]
+              Pia Hsu @analyst-strat2 [title: $analyst] [roles: strategy-analyst]
+            ~dept Investor Relations @fin-ir [head: @vp-strategy] %hanging
+              Carla North @dir-ir [title: $dir] [roles: investor-relations-director]
+              Ivan Pike @mgr-ir [title: $mgr] [roles: investor-relations-manager]
+              Quinn Star @analyst-ir [title: $analyst] [roles: investor-relations-analyst]
+
+      Lotte Bren @chro [title: $chro] [roles: chief-people-officer]
+        ~dept People and Culture @people [head: @chro] %hanging-both
+          Maja Park @vp-people [title: $vp] [roles: people-operations-vp]
+            ~dept Talent Acquisition @people-ta [head: @vp-people] %hanging
+              Hugo Lane @mgr-ta [title: $mgr] [roles: talent-acquisition-manager]
+              Rosa Bell @lead-recruiting [title: $lead] [roles: recruiting-lead]
+              Timo Gray @spc-recruiter1 [title: $spc] [roles: recruiter]
+              Freya Cole @spc-recruiter2 [title: $spc] [roles: recruiter]
+            ~dept Learning and Development @people-lnd [head: @vp-people] %hanging
+              Nina Holt @mgr-lnd [title: $mgr] [roles: learning-manager]
+              Olek Trent @spc-coach [title: $spc] [roles: leadership-coach]
+              Vina Shaw @spc-curriculum [title: $spc] [roles: curriculum-specialist]
+          Tarek Jain @vp-totalrewards [title: $vp] [roles: total-rewards-vp]
+            ~dept Compensation @people-comp [head: @vp-totalrewards] %hanging
+              Lila Crow @mgr-comp [title: $mgr] [roles: compensation-manager]
+              Owen Doss @analyst-comp1 [title: $analyst] [roles: compensation-analyst]
+              Mae York @analyst-comp2 [title: $analyst] [roles: compensation-analyst]
+            ~dept People Analytics @people-analytics [head: @vp-totalrewards] %hanging
+              Rami Solis @mgr-peopledata [title: $mgr] [roles: people-analytics-manager]
+              Juri Penn @analyst-people1 [title: $analyst] [roles: people-analyst]
+              Belle Knox @analyst-people2 [title: $analyst] [roles: people-analyst]
+
+      Imani Crest @ciso [title: $ciso] [roles: chief-information-security-officer]
+        ~dept Security and Trust @security [head: @ciso] %hanging-both
+          Devin Pike @dir-cyber [title: $dir] [roles: cybersecurity-director]
+            ~dept Security Engineering @sec-eng [head: @dir-cyber] %hanging
+              Elio Trent @lead-seceng [title: $lead] [roles: security-engineering-lead]
+              Mina Cole @architect-sec [title: $architect] [roles: security-architect]
+              Yuri Kane @engineer-sec1 [title: $engineer] [roles: security-engineer]
+              Dana Yu @engineer-sec2 [title: $engineer] [roles: security-engineer]
+            ~dept Detection and Response @sec-soc [head: @dir-cyber] %hanging
+              Holly Prince @mgr-soc [title: $mgr] [roles: soc-manager]
+              Axel Shaw @lead-ir [title: $lead] [roles: incident-response-lead]
+              Emi Nash @analyst-soc1 [title: $analyst] [roles: soc-analyst]
+              Ben Wolfe @analyst-soc2 [title: $analyst] [roles: soc-analyst]
+          Talia Moss @dir-grc [title: $dir] [roles: governance-risk-compliance-director]
+            ~dept Compliance and Privacy @sec-compliance [head: @dir-grc] %hanging-both
+              Ruben Hall @dir-compliance [title: $dir] [roles: compliance-director]
+              Ina Pierce @lead-compliance [title: $lead] [roles: compliance-lead]
+              Zoe Quinn @spc-privacy [title: $spc] [roles: privacy-specialist]
+              Nova Dean @spc-audit [title: $spc] [roles: audit-specialist]
+              Miki Stone @lead-biotech [title: $lead] [roles: biotech-regulatory-specialist]
+
+      Greta Solberg @gc [title: general counsel] [roles: compliance-counsel]
+        ~dept Legal Affairs @legal [head: @gc] %hanging
+          Iris Wren @dir-legal [title: $dir] [roles: legal-operations-director]
+          Samir Pike @legal-counsel1 [title: $legal] [roles: legal-counsel]
+          Asha Reed @legal-counsel2 [title: $legal] [roles: legal-counsel]
+          Theo Marsh @legal-ops [title: $mgr] [roles: legal-operations-manager]
+
+  ~dept Revenue and Customer @commercial [head: @vp-sales-global]
+    Vera Chain @vp-sales-global [title: $vp] [roles: global-sales-vp]
+      ~dept EMEA Sales @sales-emea [head: @vp-sales-emea] %hanging-both
+        Niko Vale @vp-sales-emea [title: $vp] [roles: sales-lead]
+        Jada Miles @mgr-enterprise-emea [title: $mgr] [roles: enterprise-sales-manager]
+        Tariq Moon @mgr-midmarket-emea [title: $mgr] [roles: midmarket-sales-manager]
+        Lina Cole @lead-revops-emea [title: $lead] [roles: revenue-operations-lead]
+      ~dept Americas Sales @sales-amer [head: @vp-sales-amer] %hanging-both
+        Rhea Knox @vp-sales-amer [title: $vp] [roles: sales-lead]
+        Owen Bright @mgr-enterprise-amer [title: $mgr] [roles: enterprise-sales-manager]
+        Kira Voss @mgr-midmarket-amer [title: $mgr] [roles: midmarket-sales-manager]
+        Milo Renz @lead-revops-amer [title: $lead] [roles: revenue-operations-lead]
+      ~dept Customer Experience @cx [head: @vp-cx] %hanging-both
+        Sana Field @vp-cx [title: $vp] [roles: customer-experience-vp]
+        Jori Hale @dir-success [title: $dir] [roles: customer-success-director]
+        Axel Moon @dir-support [title: $dir] [roles: support-lead]
+        Pia Cloud @lead-support-global [title: $lead] [roles: support-lead]
+        Amir West @mgr-support-emea [title: $mgr] [roles: support-manager]
+        Nora Vale @mgr-support-amer [title: $mgr] [roles: support-manager]
+        ~vacant VACANT @vac-support-apac [title: $mgr]
+
+links
+  @ciso --> @ceo [kind: risk] [label: risk governance]
+  @gc --> @ceo [kind: legal] [label: legal escalation]
+  @vp-data --> @cfo [kind: governance] [label: data monetization]
+  @vp-cloud --> @coo [kind: architecture] [label: infra capacity]
+  @vp-research --> @cto [kind: innovation] [label: lab portfolio]
+  @vp-sales-emea --> @coo [kind: planning] [label: demand planning]
+  @dir-compliance --> @gc [kind: compliance] [label: regulatory controls]
+  @lead-biotech --> @dir-compliance [kind: advisory] [label: controlled products]
+  @mgr-platform --> @ciso [kind: dotted] [label: security exceptions]
+  @lead-support-global --> @vp-cx [kind: service] [label: critical incidents]

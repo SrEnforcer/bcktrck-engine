@@ -1,7 +1,53 @@
 import { describe, expect, it } from 'vitest'
-import { fromNullable, getOrElse } from '@tsfpp/prelude'
+import { fromNullable, getOrElse, intoMap, none, some } from '@tsfpp/prelude'
 import { applyLayoutHints } from './apply-layout-hints'
+import type { IndexedTree, PlacedTree } from './types'
 import { mkApplyHintTree, mkPlacedFromEntries } from '../tests/factories/layout-slice'
+
+const mkStaffBranchTree = (): IndexedTree => ({
+  rootId: 'root',
+  nodes: intoMap([
+    ['root', {
+      id: 'root',
+      kind: 'employee',
+      label: 'Root',
+      depth: 0,
+      parentId: none,
+      childIndex: 0,
+      children: ['child'],
+      staffLeft: [],
+      staffRight: ['staff-a']
+    }],
+    ['child', {
+      id: 'child',
+      kind: 'employee',
+      label: 'Child',
+      depth: 1,
+      parentId: some('root'),
+      childIndex: 0,
+      children: ['grandchild'],
+      staffLeft: [],
+      staffRight: []
+    }],
+    ['grandchild', {
+      id: 'grandchild',
+      kind: 'employee',
+      label: 'Grandchild',
+      depth: 2,
+      parentId: some('child'),
+      childIndex: 0,
+      children: [],
+      staffLeft: [],
+      staffRight: []
+    }]
+  ])
+})
+
+const mkStaffBranchPlaced = (): PlacedTree => mkPlacedFromEntries([
+  ['root', { x: 0, y: 0 }],
+  ['child', { x: 0, y: 1 }],
+  ['grandchild', { x: 0, y: 2 }]
+])
 
 describe('applyLayoutHints when no hanging hint exists', () => {
   it('returns unchanged positions', () => {
@@ -50,5 +96,31 @@ describe('applyLayoutHints when root has hanging-both hint with two children', (
     expect(b).toBeDefined()
     expect(getOrElse(() => 0)(fromNullable(a?.x)) > 0).toBe(true)
     expect(getOrElse(() => 0)(fromNullable(b?.x)) < 0).toBe(true)
+  })
+})
+
+describe('applyLayoutHints when a parent has side staff and regular children', () => {
+  it('shifts the entire child subtree down by one row', () => {
+    const tree = mkStaffBranchTree()
+    const placed = mkStaffBranchPlaced()
+
+    const result = applyLayoutHints(tree, placed)
+
+    expect(result.positions.get('child')?.y).toBe(2)
+    expect(result.positions.get('grandchild')?.y).toBe(3)
+  })
+})
+
+describe('applyLayoutHints when a parent hosts a staff shadow and regular children', () => {
+  it('shifts the entire child subtree down by one row', () => {
+    const tree = mkApplyHintTree({ layoutHint: undefined, children: ['child'] })
+    const placed = mkPlacedFromEntries([
+      ['root', { x: 0, y: 0 }],
+      ['child', { x: 0, y: 1 }]
+    ])
+
+    const result = applyLayoutHints(tree, placed, { staffRowHostIds: ['root'] })
+
+    expect(result.positions.get('child')?.y).toBe(2)
   })
 })

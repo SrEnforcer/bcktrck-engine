@@ -45,19 +45,44 @@ const placed: PlacedTree = {
   ])
 }
 
-const staff: PlacedStaff = {
-  staff: [
-    { id: 'staff-l', label: 'L', x: -1, y: 0, side: 'left' },
-    { id: 'staff-r', label: 'R', x: 1, y: 0, side: 'right' }
-  ]
-}
-
 describe('renderStaffConnectors', () => {
-  it('renders connector lines for left and right staff nodes', () => {
-    const result = renderStaffConnectors({ tree, placed, staff, cfg, safeCfg: cfg })
+  it('branches from the trunk centerline when a staff node sits below the parent center', () => {
+    const branchStaff: PlacedStaff = {
+      staff: [
+        { id: 'staff-l', label: 'L', x: -1, y: 0.5, side: 'left' },
+        { id: 'staff-r', label: 'R', x: 1, y: 0.5, side: 'right' }
+      ]
+    }
+
+    const result = renderStaffConnectors({ tree, placed, staff: branchStaff, cfg, safeCfg: cfg })
+    const all = result.elements.join(' ')
 
     expect(result.elements.length).toBe(2)
-    expect(result.elements.join('').includes('class="staff-edge"')).toBe(true)
+    expect(all.includes('class="staff-edge"')).toBe(true)
+    expect(all.includes('x1="40" y1="96"')).toBe(true)
+    expect(all.includes('x1="0" y1="96"')).toBe(false)
+    expect(all.includes('x1="80" y1="96"')).toBe(false)
+  })
+
+  it('chains multiple right-side staff connectors to avoid passing through nearer staff boxes', () => {
+    const multiTree: IndexedTree = {
+      rootId: 'root',
+      nodes: intoMap([
+        ['root', { id: 'root', kind: 'employee', label: 'Root', depth: 0, parentId: none, childIndex: 0, children: [], staffLeft: [], staffRight: ['staff-r', 'staff-r2'] }]
+      ])
+    }
+    const multiStaff: PlacedStaff = {
+      staff: [
+        { id: 'staff-r', label: 'R1', x: 1.05, y: 0.2, side: 'right' },
+        { id: 'staff-r2', label: 'R2', x: 2.1, y: 0.2, side: 'right' }
+      ]
+    }
+
+    const result = renderStaffConnectors({ tree: multiTree, placed, staff: multiStaff, cfg, safeCfg: cfg })
+    const all = result.elements.join(' ')
+
+    expect(all.includes('x1="80" y1="60" x2="168" y2="60"')).toBe(false)
+    expect(all.includes('x1="132" y1="60" x2="168" y2="60"')).toBe(true)
   })
 })
 

@@ -20,7 +20,9 @@ type CliIo = {
   readonly stderr: (text: string) => void
 }
 
-const usage = 'Usage: bcktrck <file.btl>'
+const usage = 'Usage: bcktrck [--build-info] <file.btl>'
+
+const buildInfoMarker = 'bcktrck-build: routing-obstacle-fix-2026-05-25'
 
 const defaultIo: CliIo = {
   readTextFile: async (path: string): Promise<string> => readFile(path, 'utf8'),
@@ -90,7 +92,9 @@ const writeCompileFailure = (result: Extract<ReturnType<typeof compile>, { reado
 // eslint-disable-next-line complexity -- imperative CLI flow branches by user/help/parse/resolve/fs-error outcomes.
 export const runCli = async (args: readonly string[], io: CliIo = defaultIo): Promise<number> => {
   const normalizedArgs = args[0] === '--' ? args.slice(1) : args
-  const filePathOption = fromNullable(normalizedArgs[0])
+  const includeBuildInfo = normalizedArgs.includes('--build-info')
+  const positionalArgs = normalizedArgs.filter((arg) => arg !== '--build-info')
+  const filePathOption = fromNullable(positionalArgs[0])
   const filePath = isNone(filePathOption) ? '' : filePathOption.value
 
   if (!isNone(filePathOption) && (filePathOption.value === '--help' || filePathOption.value === '-h')) {
@@ -124,6 +128,9 @@ export const runCli = async (args: readonly string[], io: CliIo = defaultIo): Pr
     return writeCompileFailure(result, io)
   }
 
+  if (includeBuildInfo) {
+    io.stdout(`<!-- ${buildInfoMarker} -->\n`)
+  }
   io.stdout(`${result.svg}\n`)
   return 0
 }

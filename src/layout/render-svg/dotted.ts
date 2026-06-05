@@ -37,18 +37,11 @@ type RenderDottedEdgeElementsInput = {
   readonly safeCfg: RenderConfig
 }
 
-type DottedEndpointsInput = {
-  readonly fromBounds: NodeBounds
-  readonly toBounds: NodeBounds
-  readonly axisDelta: number
-  readonly fromSpread: number
-  readonly toSpread: number
-}
-
 type DottedGapRouteInput = {
   readonly start: SvgPoint
   readonly end: SvgPoint
   readonly gapMidY: number
+  readonly cfg: RenderConfig
   readonly sameRow: boolean
   readonly sameX: boolean
   readonly sameY: boolean
@@ -60,6 +53,7 @@ type DottedRouteInput = {
   readonly cfg: RenderConfig
   readonly fromSpread: number
   readonly toSpread: number
+  readonly obstacles: readonly NodeBounds[]
 }
 
 type DottedGapMidpointInput = {
@@ -67,6 +61,30 @@ type DottedGapMidpointInput = {
   readonly toBounds: NodeBounds
   readonly start: SvgPoint
   readonly end: SvgPoint
+}
+
+type DottedObstacleBoundsInput = {
+  readonly edge: DottedEdge
+  readonly placed: PlacedTree
+  readonly staff: PlacedStaff
+  readonly cfg: RenderConfig
+  readonly shadowBoundsMap: ReadonlyMap<string, NodeBounds>
+}
+
+type SameRowDetourInput = {
+  readonly start: SvgPoint
+  readonly end: SvgPoint
+  readonly fromBounds: NodeBounds
+  readonly toBounds: NodeBounds
+  readonly obstacles: readonly NodeBounds[]
+  readonly routeMargin: number
+}
+
+type DottedSideEndpointsInput = {
+  readonly fromBounds: NodeBounds
+  readonly toBounds: NodeBounds
+  readonly fromSpread: number
+  readonly toSpread: number
 }
 
 type ReduceOneDottedEdgeInput = {
@@ -208,39 +226,32 @@ const getSpreadOffset = (index: number, total: number, cfg: RenderConfig): numbe
   return (index - (total - 1) / 2) * gap
 }
 
-const getHorizontalDottedEndpoints = (input: DottedEndpointsInput): { readonly start: SvgPoint; readonly end: SvgPoint } => {
+const getSideDottedEndpoints = (input: DottedSideEndpointsInput): { readonly start: SvgPoint; readonly end: SvgPoint } => {
+  const fromIsLeftOfTo = input.fromBounds.cx <= input.toBounds.cx
   const startYMax = Math.max(0, input.fromBounds.h / 2 - 6)
   const endYMax = Math.max(0, input.toBounds.h / 2 - 6)
+  const startX = fromIsLeftOfTo
+    ? input.fromBounds.cx + input.fromBounds.w / 2
+    : input.fromBounds.cx - input.fromBounds.w / 2
+  const endX = fromIsLeftOfTo
+    ? input.toBounds.cx - input.toBounds.w / 2
+    : input.toBounds.cx + input.toBounds.w / 2
+
   return {
     start: {
-      x: input.fromBounds.cx + (input.axisDelta >= 0 ? input.fromBounds.w / 2 : -input.fromBounds.w / 2),
+      x: startX,
       y: input.fromBounds.cy + clamp(input.fromSpread, -startYMax, startYMax)
     },
     end: {
-      x: input.toBounds.cx + (input.axisDelta >= 0 ? -input.toBounds.w / 2 : input.toBounds.w / 2),
+      x: endX,
       y: input.toBounds.cy + clamp(input.toSpread, -endYMax, endYMax)
-    }
-  }
-}
-
-const getVerticalDottedEndpoints = (input: DottedEndpointsInput): { readonly start: SvgPoint; readonly end: SvgPoint } => {
-  const startXMax = Math.max(0, input.fromBounds.w / 2 - 8)
-  const endXMax = Math.max(0, input.toBounds.w / 2 - 8)
-  return {
-    start: {
-      x: input.fromBounds.cx + clamp(input.fromSpread, -startXMax, startXMax),
-      y: input.fromBounds.cy + (input.axisDelta >= 0 ? input.fromBounds.h / 2 : -input.fromBounds.h / 2)
-    },
-    end: {
-      x: input.toBounds.cx + clamp(input.toSpread, -endXMax, endXMax),
-      y: input.toBounds.cy + (input.axisDelta >= 0 ? -input.toBounds.h / 2 : input.toBounds.h / 2)
     }
   }
 }
 
 const getDottedGapRoute = (input: DottedGapRouteInput): readonly SvgPoint[] => {
   if (input.sameX && !input.sameRow) {
-    return [input.start, input.end]
+    return getRightDetourRoute(input.start, input.end, input.cfg)
   }
 
   const midRoute: readonly SvgPoint[] = [
@@ -252,26 +263,137 @@ const getDottedGapRoute = (input: DottedGapRouteInput): readonly SvgPoint[] => {
   return input.sameY && !input.sameRow ? midRoute : midRoute
 }
 
-const resolveDottedEndpoints = (input: DottedRouteInput): { readonly start: SvgPoint; readonly end: SvgPoint; readonly horizontalDominant: boolean } => {
-  const dx = input.toBounds.cx - input.fromBounds.cx
-  const dy = input.toBounds.cy - input.fromBounds.cy
-  const horizontalDominant = Math.abs(dx) >= Math.abs(dy)
-  const endpoints = horizontalDominant
-    ? getHorizontalDottedEndpoints({
-      fromBounds: input.fromBounds,
-      toBounds: input.toBounds,
-      axisDelta: dx,
-      fromSpread: input.fromSpread,
-      toSpread: input.toSpread
-    })
-    : getVerticalDottedEndpoints({
-      fromBounds: input.fromBounds,
-      toBounds: input.toBounds,
-      axisDelta: dy,
-      fromSpread: input.fromSpread,
-      toSpread: input.toSpread
-    })
-  return { start: endpoints.start, end: endpoints.end, horizontalDominant }
+const isNearlySameColumn = (input: DottedRouteInput): boolean => {
+  const dx = Math.abs(input.toBounds.cx - input.fromBounds.cx)
+  const threshold = Math.max(8, input.cfg.colWidth * 0.25)
+  return dx <= threshold
+}
+
+const getRightDetourRoute = (start: SvgPoint, end: SvgPoint, cfg: RenderConfig): readonly SvgPoint[] => {
+  const detour = Math.max(cfg.colWidth * 0.75, cfg.fontSize * 2)
+  const pivotX = Math.max(start.x, end.x) + detour
+  return [
+    start,
+    { x: pivotX, y: start.y },
+    { x: pivotX, y: end.y },
+    end
+  ]
+}
+
+const boundsXSpan = (bounds: NodeBounds): { readonly minX: number; readonly maxX: number } => ({
+  minX: bounds.cx - bounds.w / 2,
+  maxX: bounds.cx + bounds.w / 2
+})
+
+const boundsYSpan = (bounds: NodeBounds): { readonly minY: number; readonly maxY: number } => ({
+  minY: bounds.cy - bounds.h / 2,
+  maxY: bounds.cy + bounds.h / 2
+})
+
+const horizontalSegmentBlocked = (y: number, x1: number, x2: number, obstacles: readonly NodeBounds[]): boolean => {
+  const minX = Math.min(x1, x2)
+  const maxX = Math.max(x1, x2)
+
+  return obstacles.some((bounds) => {
+    const xSpan = boundsXSpan(bounds)
+    const ySpan = boundsYSpan(bounds)
+    const overlapsX = Math.max(minX, xSpan.minX) < Math.min(maxX, xSpan.maxX)
+    const intersectsY = y > ySpan.minY && y < ySpan.maxY
+    return overlapsX && intersectsY
+  })
+}
+
+const toNodeBoundsFromPlaced = (
+  id: string,
+  point: { readonly x: number; readonly y: number },
+  cfg: RenderConfig
+): { readonly id: string; readonly bounds: NodeBounds } => {
+  const w = cfg.nodeSize * cfg.colWidth
+  const h = cfg.nodeSize * cfg.rowHeight
+  const x = point.x * cfg.colWidth
+  const y = point.y * cfg.rowHeight
+  return {
+    id,
+    bounds: {
+      cx: x + w / 2,
+      cy: y + h / 2,
+      w,
+      h
+    }
+  }
+}
+
+const toNodeBoundsFromStaff = (
+  staffPosition: PlacedStaff['staff'][number],
+  cfg: RenderConfig
+): { readonly id: string; readonly bounds: NodeBounds } => {
+  const w = cfg.staffSize * cfg.colWidth
+  const h = cfg.staffSize * cfg.rowHeight
+  const x = staffPosition.x * cfg.colWidth
+  const y = staffPosition.y * cfg.rowHeight
+  return {
+    id: staffPosition.id,
+    bounds: {
+      cx: x + w / 2,
+      cy: y + h / 2,
+      w,
+      h
+    }
+  }
+}
+
+const obstacleBoundsForEdge = (input: DottedObstacleBoundsInput): readonly NodeBounds[] => {
+  const fromId = String(input.edge.from)
+  const toId = String(input.edge.to)
+
+  const placedBounds = Array.from(input.placed.positions.entries())
+    .map(([id, point]) => toNodeBoundsFromPlaced(id, point, input.cfg))
+
+  const staffBounds = input.staff.staff
+    .map((staffPosition) => toNodeBoundsFromStaff(staffPosition, input.cfg))
+
+  const shadowBounds = Array.from(input.shadowBoundsMap.entries())
+    .map(([id, bounds]) => ({ id, bounds }))
+
+  return [...placedBounds, ...staffBounds, ...shadowBounds]
+    .filter((entry) => entry.id !== fromId && entry.id !== toId)
+    .map((entry) => entry.bounds)
+}
+
+const sameRowDetourRoute = (input: SameRowDetourInput): readonly SvgPoint[] => {
+  const blocked = horizontalSegmentBlocked(input.start.y, input.start.x, input.end.x, input.obstacles)
+  if (!blocked) {
+    return [input.start, input.end]
+  }
+
+  const fromYSpan = boundsYSpan(input.fromBounds)
+  const toYSpan = boundsYSpan(input.toBounds)
+
+  const aboveCandidate = Math.min(fromYSpan.minY, toYSpan.minY) - input.routeMargin
+  const belowCandidate = Math.max(fromYSpan.maxY, toYSpan.maxY) + input.routeMargin
+
+  const blockersInCorridor = input.obstacles.filter((bounds) => {
+    const xSpan = boundsXSpan(bounds)
+    const minX = Math.min(input.start.x, input.end.x)
+    const maxX = Math.max(input.start.x, input.end.x)
+    return Math.max(minX, xSpan.minX) < Math.min(maxX, xSpan.maxX)
+  })
+
+  const blockerTop = blockersInCorridor.reduce((acc, bounds) => Math.min(acc, boundsYSpan(bounds).minY), Number.POSITIVE_INFINITY)
+  const blockerBottom = blockersInCorridor.reduce((acc, bounds) => Math.max(acc, boundsYSpan(bounds).maxY), Number.NEGATIVE_INFINITY)
+
+  const channelAbove = Number.isFinite(blockerTop) ? Math.min(aboveCandidate, blockerTop - input.routeMargin) : aboveCandidate
+  const channelBelow = Number.isFinite(blockerBottom) ? Math.max(belowCandidate, blockerBottom + input.routeMargin) : belowCandidate
+
+  const chooseAbove = Math.abs(channelAbove - input.start.y) <= Math.abs(channelBelow - input.start.y)
+  const channelY = chooseAbove ? channelAbove : channelBelow
+
+  return [
+    input.start,
+    { x: input.start.x, y: channelY },
+    { x: input.end.x, y: channelY },
+    input.end
+  ]
 }
 
 const resolveDottedGapMidY = (input: DottedGapMidpointInput): number => {
@@ -284,17 +406,29 @@ const resolveDottedGapMidY = (input: DottedGapMidpointInput): number => {
 
 const getDottedRoute = (input: DottedRouteInput): readonly SvgPoint[] => {
   const routeMargin = Math.max(input.cfg.fontSize, Math.round(input.cfg.rowHeight * 0.09))
-  const resolved = resolveDottedEndpoints(input)
-  const start = resolved.start
-  const end = resolved.end
+  const endpoints = getSideDottedEndpoints({
+    fromBounds: input.fromBounds,
+    toBounds: input.toBounds,
+    fromSpread: input.fromSpread,
+    toSpread: input.toSpread
+  })
+  const start = endpoints.start
+  const end = endpoints.end
+
+  if (isNearlySameColumn(input)) {
+    return getRightDetourRoute(start, end, input.cfg)
+  }
 
   const sameRow = Math.abs(input.fromBounds.cy - input.toBounds.cy) < 0.01
-  if (sameRow && resolved.horizontalDominant) {
-    const channelY = Math.min(
-      input.fromBounds.cy - input.fromBounds.h / 2,
-      input.toBounds.cy - input.toBounds.h / 2
-    ) - routeMargin
-    return [start, { x: start.x, y: channelY }, { x: end.x, y: channelY }, end]
+  if (sameRow) {
+    return sameRowDetourRoute({
+      start,
+      end,
+      fromBounds: input.fromBounds,
+      toBounds: input.toBounds,
+      obstacles: input.obstacles,
+      routeMargin
+    })
   }
 
   const gapMidY = resolveDottedGapMidY({
@@ -307,7 +441,8 @@ const getDottedRoute = (input: DottedRouteInput): readonly SvgPoint[] => {
   return getDottedGapRoute({
     start,
     end,
-    gapMidY,
+    gapMidY: gapMidY - routeMargin * 0.1,
+    cfg: input.cfg,
     sameRow,
     sameX: Math.abs(start.x - end.x) < 0.01,
     sameY: Math.abs(start.y - end.y) < 0.01
@@ -321,6 +456,7 @@ const getDottedRoutePointsForEdge = (input: {
   readonly cfg: RenderConfig
   readonly fromBounds: NodeBounds
   readonly toBounds: NodeBounds
+  readonly obstacles: readonly NodeBounds[]
 }): readonly SvgPoint[] => {
   const fromKey = String(input.edge.from)
   const toKey = String(input.edge.to)
@@ -330,7 +466,14 @@ const getDottedRoutePointsForEdge = (input: {
   const toTotal = numberOrDefault(input.totals.inTotals[toKey], 1)
   const fromSpread = getSpreadOffset(fromIndex, fromTotal, input.cfg)
   const toSpread = getSpreadOffset(toIndex, toTotal, input.cfg)
-  return getDottedRoute({ fromBounds: input.fromBounds, toBounds: input.toBounds, cfg: input.cfg, fromSpread, toSpread })
+  return getDottedRoute({
+    fromBounds: input.fromBounds,
+    toBounds: input.toBounds,
+    cfg: input.cfg,
+    fromSpread,
+    toSpread,
+    obstacles: input.obstacles
+  })
 }
 
 const reduceOneDottedEdge = (input: ReduceOneDottedEdgeInput): DottedRenderState => {
@@ -360,7 +503,14 @@ const reduceOneDottedEdge = (input: ReduceOneDottedEdgeInput): DottedRenderState
     totals: input.totals,
     cfg: input.cfg,
     fromBounds: fromBoundsOption.value,
-    toBounds: toBoundsOption.value
+    toBounds: toBoundsOption.value,
+    obstacles: obstacleBoundsForEdge({
+      edge: input.edge,
+      placed: input.placed,
+      staff: input.staff,
+      cfg: input.cfg,
+      shadowBoundsMap: input.shadowBoundsMap
+    })
   })
   return renderDottedEdgeElements({
     state: input.state,

@@ -29,7 +29,8 @@ import { applyLayoutHints } from './layout/apply-layout-hints'
 import { placeStaff } from './layout/staff-placement'
 import { routeEdgesWithDiagnostics } from './layout/route-edges'
 import { renderSvg, defaultRenderConfig } from './layout/render-svg'
-import { applyDefinitionsToStyleSheet, mergeStyleSheets, resolveStyleSheet } from './style/dsl'
+import { mergeStyleSheets, resolveStyleSheet } from './style/dsl'
+import type { applyDefinitionsToStyleSheet } from './style/dsl'
 import { buildCompileStyleContext, extractSourceStyle, parseSupplementalStyleSource, type CompileStyleContext } from './compile/style-context'
 import type { RenderConfig, RenderError, RenderedSvg } from './layout/types'
 import type { AstNode } from './types/ast'
@@ -485,7 +486,12 @@ const buildCompiledLayoutArtifacts = (input: BuildCompiledLayoutArtifactsInput):
     }
   }
 
-  const placedArtifacts = buildPlacementArtifacts(indexed, input.cfg, styleResolved.styleMap)
+  const placedArtifacts = buildPlacementArtifacts({
+    indexed,
+    tree: input.tree,
+    cfg: input.cfg,
+    styleMap: styleResolved.styleMap
+  })
   if (!placedArtifacts.ok) {
     return {
       ok: false,
@@ -502,13 +508,27 @@ const buildCompiledLayoutArtifacts = (input: BuildCompiledLayoutArtifactsInput):
   }
 }
 
-const buildPlacementArtifacts = (
-  indexed: ReturnType<typeof indexTree>,
-  cfg: RenderConfig,
-  styleMap: ReadonlyMap<string, ResolvedNodeStyle>
-): PlacementArtifacts => {
+type BuildPlacementArtifactsInput = {
+  readonly indexed: ReturnType<typeof indexTree>
+  readonly tree: OrgTree
+  readonly cfg: RenderConfig
+  readonly styleMap: ReadonlyMap<string, ResolvedNodeStyle>
+}
+
+const collectHostedStaffShadowIds = (tree: OrgTree): ReadonlyArray<string> =>
+  tree.shadowNodes
+    .filter((shadow) => shadow.type === 'staff')
+    .flatMap((shadow) => {
+      const hostOption = fromNullable(shadow.host)
+      return isNone(hostOption) ? [] : [String(hostOption.value)]
+    })
+    .reduce<ReadonlyArray<string>>((acc, hostId) => (acc.includes(hostId) ? acc : [...acc, hostId]), [])
+
+const buildPlacementArtifacts = (input: BuildPlacementArtifactsInput): PlacementArtifacts => {
+  const { indexed, tree, cfg, styleMap } = input
   const placedBase = buchheim(indexed)
-  const placed = applyLayoutHints(indexed, placedBase)
+  const hostedStaffShadowIds = collectHostedStaffShadowIds(tree)
+  const placed = applyLayoutHints(indexed, placedBase, { staffRowHostIds: hostedStaffShadowIds })
   const positionErrors = layoutPositionErrors(Array.from(indexed.nodes.keys()), placed.positions)
   if (positionErrors.length > 0) {
     return {
@@ -521,6 +541,8 @@ const buildPlacementArtifacts = (
   const routed = routeEdgesWithDiagnostics({
     tree: indexed,
     placed,
+    staff,
+    shadowNodes: tree.shadowNodes,
     cfg,
     styleMap
   })

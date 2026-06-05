@@ -34,6 +34,36 @@ const siblingDepartmentTree = (): OrgTree => {
   }
 }
 
+const staffManagerTree = (): OrgTree => {
+  const advisor = mkOrgEmployee({ id: 'n-advisor', title: 'Advisor', children: [] })
+  const support = mkOrgDepartment({ id: 'd-support', name: 'Support', head: 'n-manager', members: [advisor] })
+  const manager = mkOrgEmployee({ id: 'n-manager', title: 'Team Manager', children: [support] })
+
+  return {
+    root: mkOrgDepartment({ id: 'd-root', name: 'Cluster', head: 'n-manager', members: [manager] }),
+    dottedEdges: [],
+    shadowNodes: []
+  }
+}
+
+const crossBranchHeadTree = (): OrgTree => {
+  const advisor = mkOrgEmployee({ id: 'n-advisor', title: 'Advisor', children: [] })
+  const staff = mkOrgDepartment({ id: 'd-staff', name: 'Staff', head: 'n-manager', members: [advisor] })
+  const coordinator = mkOrgEmployee({ id: 'n-coordinator', title: 'Coordinator', children: [staff] })
+  const manager = mkOrgEmployee({ id: 'n-manager', title: 'Jan-Willem', children: [] })
+
+  return {
+    root: mkOrgDepartment({
+      id: 'd-root',
+      name: 'Cluster',
+      head: 'n-manager',
+      members: [manager, coordinator]
+    }),
+    dottedEdges: [],
+    shadowNodes: []
+  }
+}
+
 describe('listSubtrees when traversing a mixed tree', () => {
   it('returns entries in pre-order with depth and label formatting', () => {
     const result = listSubtrees(sampleTree())
@@ -54,6 +84,38 @@ describe('isolateSubtree when the id exists', () => {
 
     expect(isSome(result)).toBe(true)
     expect(isSome(result) ? result.value.dottedEdges.length : 0).toBe(1)
+  })
+})
+
+describe('isolateSubtree when department head is outside the selected subtree', () => {
+  it('preserves manager context by returning the external head path', () => {
+    const result = isolateSubtree(staffManagerTree(), 'd-support')
+
+    expect(isSome(result)).toBe(true)
+    expect(isSome(result) ? result.value.root.id : asNodeId('missing')).toBe(asNodeId('n-manager'))
+    expect(
+      isSome(result) &&
+      result.value.root.kind === 'employee' &&
+      result.value.root.children[0]?.kind === 'department'
+        ? result.value.root.children[0].id
+        : asNodeId('missing')
+    ).toBe(asNodeId('d-support'))
+  })
+})
+
+describe('isolateSubtree when department head is outside the ancestor path', () => {
+  it('includes the referenced manager from another branch as context root', () => {
+    const result = isolateSubtree(crossBranchHeadTree(), 'd-staff')
+
+    expect(isSome(result)).toBe(true)
+    expect(isSome(result) ? result.value.root.id : asNodeId('missing')).toBe(asNodeId('n-manager'))
+    expect(
+      isSome(result) &&
+      result.value.root.kind === 'employee' &&
+      result.value.root.children[0]?.kind === 'department'
+        ? result.value.root.children[0].id
+        : asNodeId('missing')
+    ).toBe(asNodeId('d-staff'))
   })
 })
 
@@ -78,6 +140,22 @@ describe('isolateSubtrees when one id is valid and one is unknown', () => {
     const result = isolateSubtrees(sampleTree(), ['n-ceo', 'missing'])
 
     expect(isSome(result)).toBe(true)
+  })
+})
+
+describe('isolateSubtrees when a single department id is selected in forest mode', () => {
+  it('preserves external manager context for the selected department', () => {
+    const result = isolateSubtrees(crossBranchHeadTree(), ['d-staff'])
+
+    expect(isSome(result)).toBe(true)
+    expect(isSome(result) ? result.value.root.id : asNodeId('missing')).toBe(asNodeId('n-manager'))
+    expect(
+      isSome(result) &&
+      result.value.root.kind === 'employee' &&
+      result.value.root.children[0]?.kind === 'department'
+        ? result.value.root.children[0].id
+        : asNodeId('missing')
+    ).toBe(asNodeId('d-staff'))
   })
 })
 

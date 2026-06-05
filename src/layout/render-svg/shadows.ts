@@ -43,6 +43,7 @@ type ShadowDimensions = {
 }
 
 type ResolveStaffShadowPlacementInput = {
+  readonly tree: IndexedTree
   readonly shadow: ShadowNode
   readonly placed: PlacedTree
   readonly staff: PlacedStaff
@@ -62,6 +63,7 @@ type ResolveGenericShadowPlacementInput = {
 }
 
 type ResolveShadowPlacementInput = {
+  readonly tree: IndexedTree
   readonly shadow: ShadowNode
   readonly placed: PlacedTree
   readonly staff: PlacedStaff
@@ -109,6 +111,7 @@ type ShadowEdgeAttachPointInput = {
 
 type BuildShadowBoundsMapInput = {
   readonly shadowNodes: readonly ShadowNode[]
+  readonly tree: IndexedTree
   readonly placed: PlacedTree
   readonly staff: PlacedStaff
   readonly cfg: RenderConfig
@@ -146,6 +149,52 @@ const resolveStaffShadowPlacement = (
   }
 
   const hostOption = fromNullable(input.shadow.host)
+  const positionedFromHost = isNone(hostOption)
+    ? undefined
+    : (() => {
+      const hostNodeOption = fromNullable(input.tree.nodes.get(hostOption.value))
+      const hostPosOption = fromNullable(input.placed.positions.get(hostOption.value))
+      if (isNone(hostNodeOption) || isNone(hostPosOption)) {
+        return undefined
+      }
+
+      const hostNode = hostNodeOption.value
+      const hostPos = hostPosOption.value
+      const childTopYs = hostNode.children
+        .map((childId) => input.placed.positions.get(childId)?.y)
+        .filter((childY): childY is number => childY !== undefined)
+      const parentBottomY = hostPos.y + input.cfg.nodeSize
+      const nearestChildTopY = childTopYs.reduce<number | undefined>(
+        (currentMin, childY) => currentMin === undefined || childY < currentMin ? childY : currentMin,
+        undefined
+      )
+      const anchorY = nearestChildTopY !== undefined && nearestChildTopY > parentBottomY
+        ? (parentBottomY + nearestChildTopY) / 2
+        : hostPos.y + input.cfg.nodeSize / 2
+
+      const side = pipe(fromNullable(input.shadow.side), getOrElse(() => 'right'))
+      const direction = side === 'left' ? -1 : 1
+      const baseOffset = (input.cfg.nodeSize + input.cfg.staffSize) / 2 + 0.05
+      const parentCenterX = hostPos.x + input.cfg.nodeSize / 2
+      const xGrid = parentCenterX + direction * baseOffset - input.cfg.staffSize / 2
+      const yGrid = anchorY - input.cfg.staffSize / 2
+
+      return {
+        x: xGrid * input.cfg.colWidth,
+        y: yGrid * input.cfg.rowHeight,
+        sx: xGrid * input.cfg.colWidth + input.dimensions.w / 2,
+        sy: yGrid * input.cfg.rowHeight + input.dimensions.h / 2,
+        w: input.dimensions.w,
+        h: input.dimensions.h,
+        primaryPos: input.primaryPos,
+        shadowStyle: input.shadowStyle
+      } satisfies ShadowPlacement
+    })()
+
+  if (positionedFromHost !== undefined) {
+    return positionedFromHost
+  }
+
   const hostAnchor = isNone(hostOption)
     ? input.primaryPos
     : getNodeBounds({
@@ -237,6 +286,7 @@ const resolveShadowPlacement = (
 
   const dimensions = shadowDimensions(input.shadow, input.cfg)
   const staffPlacement = resolveStaffShadowPlacement({
+    tree: input.tree,
     shadow: input.shadow,
     placed: input.placed,
     staff: input.staff,
@@ -347,6 +397,7 @@ const renderSingleShadowBody = (
   input: RenderSingleShadowBodyInput
 ): ShadowBodyRender => {
   const placement = resolveShadowPlacement({
+    tree: input.tree,
     shadow: input.shadow,
     placed: input.placed,
     staff: input.staff,
@@ -392,6 +443,7 @@ export const buildShadowBoundsMap = (
 ): ReadonlyMap<string, NodeBounds> => {
   const entries = input.shadowNodes.flatMap((shadow) => {
     const placementOption = fromNullable(resolveShadowPlacement({
+      tree: input.tree,
       shadow,
       placed: input.placed,
       staff: input.staff,

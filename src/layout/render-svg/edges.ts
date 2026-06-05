@@ -49,6 +49,11 @@ type RenderStaffConnectorSideInput = {
   readonly sideState: SectionRender
 }
 
+type StaffConnectorChainState = {
+  readonly section: SectionRender
+  readonly previousOutX: number | undefined
+}
+
 type RenderStaffConnectorsForParentInput = {
   readonly state: SectionRender
   readonly parentId: string
@@ -106,26 +111,64 @@ const renderOneStaffConnector = (
   bounds: { minX: Math.min(input.x1, input.x2), minY: input.y, maxX: Math.max(input.x1, input.x2), maxY: input.y }
 })
 
+const parentSideStartX = (isLeft: boolean, parentX: number, nodeW: number): number =>
+  isLeft ? parentX : parentX + nodeW
+
+const staffSideTargetX = (isLeft: boolean, staffX: number, staffW: number): number =>
+  isLeft ? staffX + staffW : staffX
+
+const staffSideOutboundX = (isLeft: boolean, staffX: number, staffW: number): number =>
+  isLeft ? staffX : staffX + staffW
+
+const staffCenterY = (staffY: number, cfg: RenderConfig): number =>
+  staffY + (cfg.staffSize * cfg.rowHeight) / 2
+
+const staffBranchStartX = (
+  input: Readonly<{
+    readonly isLeft: boolean
+    readonly parentX: number
+    readonly nodeW: number
+    readonly parentCy: number
+    readonly connectorY: number
+  }>
+): number =>
+  Math.abs(input.connectorY - input.parentCy) < 0.001
+    ? parentSideStartX(input.isLeft, input.parentX, input.nodeW)
+    : input.parentX + input.nodeW / 2
+
 const renderStaffConnectorSide = (
   input: RenderStaffConnectorSideInput
 ): SectionRender =>
-  input.staffIds.reduce<SectionRender>((nextSideState, staffId) => {
+  input.staffIds.reduce<StaffConnectorChainState>((nextSideState, staffId) => {
     const staffPosOption = fromNullable(input.staffById[staffId])
     if (isSome(staffPosOption)) {
       const staffPos = staffPosOption.value
       const staffX = staffPos.x * input.cfg.colWidth
+      const connectorY = staffCenterY(staffPos.y * input.cfg.rowHeight, input.cfg)
       const staffW = input.cfg.staffSize * input.cfg.colWidth
-      const x1 = input.isLeft ? input.parentX : input.parentX + input.nodeW
-      const x2 = input.isLeft ? staffX + staffW : staffX
-      const rendered = renderOneStaffConnector({ x1, x2, y: input.parentCy, safeCfg: input.safeCfg })
+      const x1 = pipe(
+        fromNullable(nextSideState.previousOutX),
+        getOrElse(() => staffBranchStartX({
+          isLeft: input.isLeft,
+          parentX: input.parentX,
+          nodeW: input.nodeW,
+          parentCy: input.parentCy,
+          connectorY
+        }))
+      )
+      const x2 = staffSideTargetX(input.isLeft, staffX, staffW)
+      const rendered = renderOneStaffConnector({ x1, x2, y: connectorY, safeCfg: input.safeCfg })
 
       return {
-        elements: [...nextSideState.elements, rendered.element],
-        bounds: mergeRenderBounds(nextSideState.bounds, rendered.bounds)
+        section: {
+          elements: [...nextSideState.section.elements, rendered.element],
+          bounds: mergeRenderBounds(nextSideState.section.bounds, rendered.bounds)
+        },
+        previousOutX: staffSideOutboundX(input.isLeft, staffX, staffW)
       }
     }
     return nextSideState
-  }, input.sideState)
+  }, { section: input.sideState, previousOutX: undefined }).section
 
 const renderStaffConnectorsForParent = (
   input: RenderStaffConnectorsForParentInput

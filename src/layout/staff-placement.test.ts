@@ -1,25 +1,69 @@
-import { fromNullable, getOrElse } from '@tsfpp/prelude'
+import { fromNullable, getOrElse, intoMap, none, some } from '@tsfpp/prelude'
 import { describe, expect, it } from 'vitest'
 import { placeStaff } from './staff-placement'
+import type { IndexedTree, PlacedTree } from './types'
 import {
   mkPlacedFromEntries,
   mkStaffPlacementPlaced,
   mkStaffPlacementTree
 } from '../tests/factories/layout-slice'
 
+const mkMidGapStaffTree = (): IndexedTree => ({
+  rootId: 'root',
+  nodes: intoMap([
+    ['root', {
+      id: 'root',
+      kind: 'employee',
+      label: 'Root',
+      depth: 0,
+      parentId: none,
+      childIndex: 0,
+      children: ['child'],
+      staffLeft: ['left-a'],
+      staffRight: ['right-a']
+    }],
+    ['child', {
+      id: 'child',
+      kind: 'employee',
+      label: 'Child',
+      depth: 1,
+      parentId: some('root'),
+      childIndex: 0,
+      children: [],
+      staffLeft: [],
+      staffRight: []
+    }]
+  ]),
+  staffLabels: intoMap([
+    ['left-a', 'Left A']
+  ])
+})
+
+const mkMidGapStaffPlaced = (): PlacedTree => mkPlacedFromEntries([
+  ['root', { x: 0, y: 0 }],
+  ['child', { x: 0, y: 1 }]
+])
+
 describe('placeStaff when parent position exists', () => {
-  it('places left and right staff around parent center', () => {
-    const result = placeStaff(mkStaffPlacementTree(), mkStaffPlacementPlaced(), { staffSize: 0.6, nodeSize: 1 })
+  it('places left and right staff midway toward the first child when vertical gap exists', () => {
+    const tree = mkMidGapStaffTree()
+    const placed = mkMidGapStaffPlaced()
+
+    const result = placeStaff(tree, placed, { staffSize: 0.6, nodeSize: 0.68 })
     const left = result.staff.find((entry) => entry.id === 'left-a')
     const right = result.staff.find((entry) => entry.id === 'right-a')
 
     expect(left).toBeDefined()
     expect(right).toBeDefined()
     const leftX = getOrElse<number>(() => 1)(fromNullable(left?.x))
+    const leftY = getOrElse<number>(() => 0)(fromNullable(left?.y))
     const rightX = getOrElse<number>(() => 0)(fromNullable(right?.x))
+    const rightY = getOrElse<number>(() => 0)(fromNullable(right?.y))
 
-    expect(leftX < 0.5).toBe(true)
-    expect(rightX > 0.5).toBe(true)
+    expect(leftX < 0.34).toBe(true)
+    expect(rightX > 0.34).toBe(true)
+    expect(leftY).toBeCloseTo(0.54)
+    expect(rightY).toBeCloseTo(0.54)
   })
 })
 

@@ -80,7 +80,8 @@ export type PlacedTree = {
 
 /**
  * Position of a single staff (advisor/assistant) node.
- * x is offset horizontally from the parent; y matches the parent's depth.
+ * x is offset horizontally from the parent; y may either align with the parent
+ * centerline or occupy the vertical gap before the nearest regular child.
  */
 export type StaffPosition = {
   readonly id: string

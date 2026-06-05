@@ -168,6 +168,59 @@ const filterShadowNodes = (tree: OrgTree, ids: ReadonlySet<string>): OrgTree['sh
       }
     })
 
+const withFocusedChild = (parent: OrgNode, child: OrgNode): OrgNode => {
+  if (parent.kind === 'department') {
+    return {
+      ...parent,
+      members: [child]
+    }
+  }
+
+  if (parent.kind === 'vacancy') {
+    return {
+      ...parent,
+      children: [child]
+    }
+  }
+
+  return {
+    ...parent,
+    children: [child]
+  }
+}
+
+const includeExternalDepartmentHeadContext = (tree: OrgTree, node: OrgNode): OrgNode => {
+  if (node.kind !== 'department') {
+    return node
+  }
+
+  const subtreeIds = collectNodeIds(node)
+  const headId = rawId(node.head)
+  if (subtreeIds.has(headId)) {
+    return node
+  }
+
+  const parentMap = collectParentMap(tree.root)
+  const upwardPath = upwardPathIds(rawId(node.id), parentMap)
+  const headIndex = upwardPath.findIndex((pathId) => pathId === headId)
+
+  if (headIndex >= 0) {
+    const ancestorIds = upwardPath.slice(1, headIndex + 1).reverse()
+
+    return ancestorIds.reduce<OrgNode>((focusedNode, ancestorId) => {
+      const ancestorOption = fromNullable(findNodeById(tree.root, ancestorId))
+      return isNone(ancestorOption)
+        ? focusedNode
+        : withFocusedChild(ancestorOption.value, focusedNode)
+    }, node)
+  }
+
+  const externalHeadOption = fromNullable(findNodeById(tree.root, headId))
+  return isNone(externalHeadOption)
+    ? node
+    : withFocusedChild(externalHeadOption.value, node)
+}
+
 // DEVIATION(4.4): Forest-root synthesis remains as one helper to keep root-kind branching and fallback semantics in one total function.
 // eslint-disable-next-line max-lines-per-function -- forest root synthesis preserves existing root semantics across all root kinds in one total helper.
 const buildForestRoot = (tree: OrgTree, selectedRoots: readonly OrgNode[]): OrgNode => {
@@ -271,7 +324,7 @@ export const listSubtrees = (tree: OrgTree): readonly SubtreeEntry[] =>
 export const isolateSubtree = (tree: OrgTree, id: string): Option<OrgTree> => {
   const nodeOption = fromNullable(findNodeById(tree.root, id))
   if (isNone(nodeOption)) return none
-  const node = nodeOption.value
+  const node = includeExternalDepartmentHeadContext(tree, nodeOption.value)
 
   const ids = collectNodeIds(node)
   const shadowNodes = filterShadowNodes(tree, ids)
@@ -353,6 +406,11 @@ export const isolateSubtrees = (tree: OrgTree, ids: readonly string[]): Option<O
   const selectedRoots = validRootIds
     .map((id) => findNodeById(tree.root, id))
     .filter(isSomeNode)
+
+  const singleSelectionOption = fromNullable(selectedRoots[0])
+  if (selectedRoots.length === 1 && !isNone(singleSelectionOption)) {
+    return isolateSubtree(tree, rawId(singleSelectionOption.value.id))
+  }
 
   const sharedParentIdOption = fromNullable(sharedDirectParentId(selectedRoots, parentMap))
   const sharedParentOption = isNone(sharedParentIdOption)

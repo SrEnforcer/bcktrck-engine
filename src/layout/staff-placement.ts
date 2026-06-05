@@ -36,11 +36,17 @@ type BuildStaffForNodeInput = {
   readonly config: PlaceStaffConfig
 }
 
+type StaffAnchorInput = {
+  readonly node: IndexedTree['nodes'] extends ReadonlyMap<string, infer N> ? N : never
+  readonly placed: PlacedTree
+  readonly parentY: number
+  readonly config: PlaceStaffConfig
+}
+
 const toStaffPosition = (input: ToStaffPositionInput): StaffPosition => {
   const distanceFromParent = input.config.baseOffset + input.index * input.config.stepOffset
   const direction = input.side === 'left' ? -1 : 1
   const parentCenterX = input.parentX + input.config.nodeSize / 2
-  const parentCenterY = input.parentY + input.config.nodeSize / 2
   return {
     id: input.staffId,
     label: pipe(
@@ -48,9 +54,24 @@ const toStaffPosition = (input: ToStaffPositionInput): StaffPosition => {
       getOrElse(() => input.staffId)
     ),
     x: parentCenterX + direction * distanceFromParent - input.config.staffSize / 2,
-    y: parentCenterY - input.config.staffSize / 2,
+    y: input.parentY - input.config.staffSize / 2,
     side: input.side
   }
+}
+
+const getStaffAnchorY = (input: StaffAnchorInput): number => {
+  const parentBottomY = input.parentY + input.config.nodeSize
+  const childTopYs = input.node.children
+    .map((childId) => input.placed.positions.get(childId)?.y)
+    .filter((childY): childY is number => childY !== undefined)
+  const nearestChildTopY = childTopYs.reduce<number | undefined>(
+    (currentMin, childY) => currentMin === undefined || childY < currentMin ? childY : currentMin,
+    undefined
+  )
+
+  return nearestChildTopY !== undefined && nearestChildTopY > parentBottomY
+    ? (parentBottomY + nearestChildTopY) / 2
+    : input.parentY + input.config.nodeSize / 2
 }
 
 const buildStaffForNode = (input: BuildStaffForNodeInput): readonly StaffPosition[] => {
@@ -59,6 +80,12 @@ const buildStaffForNode = (input: BuildStaffForNodeInput): readonly StaffPositio
     return []
   }
   const parentPos = parentPosOption.value
+  const anchorY = getStaffAnchorY({
+    node: input.node,
+    placed: input.placed,
+    parentY: parentPos.y,
+    config: input.config
+  })
 
   const reverseReadonly = <T>(values: ReadonlyArray<T>): ReadonlyArray<T> =>
     values.reduce<ReadonlyArray<T>>((acc, value) => [value, ...acc], [])
@@ -66,7 +93,7 @@ const buildStaffForNode = (input: BuildStaffForNodeInput): readonly StaffPositio
   const left = reverseReadonly(input.node.staffLeft)
     .map((staffId, index) => toStaffPosition({
       parentX: parentPos.x,
-      parentY: parentPos.y,
+      parentY: anchorY,
       side: 'left',
       staffId,
       index,
@@ -76,7 +103,7 @@ const buildStaffForNode = (input: BuildStaffForNodeInput): readonly StaffPositio
   const right = input.node.staffRight
     .map((staffId, index) => toStaffPosition({
       parentX: parentPos.x,
-      parentY: parentPos.y,
+      parentY: anchorY,
       side: 'right',
       staffId,
       index,
@@ -92,7 +119,9 @@ const buildStaffForNode = (input: BuildStaffForNodeInput): readonly StaffPositio
  *
  * Staff on each side are positioned at equal spacing (1 unit apart), with the
  * closest staff to the parent at baseOffset units on their respective side.
- * baseOffset = staffSize + 0.05 (tiny gap so staff appears immediately adjacent).
+ * When a visible gap exists between the parent box and its nearest regular child,
+ * staff is vertically centered in that gap so the connector can branch from the
+ * main trunk instead of reading as a peer-level node.
  */
 export const placeStaff = (
   tree: IndexedTree,
