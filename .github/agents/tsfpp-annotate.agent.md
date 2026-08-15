@@ -75,7 +75,7 @@ Every exported `function`, `const` (callable or significant), `type`, and `inter
  * @param name - <domain constraint, not the type>
  * @returns <meaning of the return value, not its type>
  *
- * @law identity — mapO(x => x)(opt) ≡ opt
+ * @law identity — mapOption(x => x)(opt) ≡ opt
  *
  * @example
  * mkUserId('usr-00123') // => some(UserId('usr-00123'))
@@ -119,11 +119,11 @@ never the AI. If unknown, use `unknown` and flag it in the summary.
 
 ### 5. DEVIATION comments (§5)
 
-When a forbidden construct is present and intentional:
+When a DEVIATION comment is needed, always call:
 
-```ts
-// DEVIATION(N.M): <reason the violation could not be avoided — not a description of the violation>
-```
+`get_deviation({ ruleId: 'N.M', reason: '<one-line justification>' })`
+
+Use the output verbatim. Never hand-write a DEVIATION comment format.
 
 Pair every bare `eslint-disable` with a DEVIATION comment above it.
 Only annotate constructs that already exist and already violate a rule.

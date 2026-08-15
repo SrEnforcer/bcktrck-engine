@@ -72,6 +72,11 @@ If a runtime bug (not a type error or failing test), ask for a minimal reproduct
 
 **Step 2 — Locate the failure site**
 
+For type errors and rule violations:
+1. Call `get_rule({ id: 'N.M' })` to read the exact rule text before diagnosing.
+2. Call `check_pattern({ code })` on the failing code snippet for a mechanical scan.
+3. Call `get_pattern({ concept })` when proposing the correct alternative.
+
 For **type errors**: read the exact tsc message. Identify:
 - Which type is wrong
 - What tsc inferred vs. what was expected
@@ -91,7 +96,7 @@ For **boundary bugs** (wrong HTTP status, unexpected response shape):
 
 For **runtime `undefined` / `null`** appearing where a domain value was expected:
 - Is `fromNullable` missing at the boundary?
-- Is a `getOrElse` collapsing an `Option` to `undefined`?
+- Is a `getOrElseOption` collapsing an `Option` to `undefined`?
 - Is a `toNullable` leaking into the domain?
 
 **Step 3 — Classify the bug**
@@ -102,7 +107,7 @@ For **runtime `undefined` / `null`** appearing where a domain value was expected
 | Boundary leak | `null`/`undefined` entering the domain, `throw` escaping an adapter | Add `fromNullable` / `tryCatch` at the boundary |
 | Exhaustiveness gap | Missing `switch` variant, no `absurd` | Add the missing case |
 | ADT mismatch | `_tag` used directly, wrong discriminant field (`kind` vs `_tag`) | Use the correct guard (`isOk`, `isSome`) |
-| Combinator misuse | `traverseArray` vs `.map()`, `orElse` vs `getOrElse` | Replace with the correct combinator |
+| Combinator misuse | `traverseArray` vs `.map()`, `orElseOption` vs `getOrElseOption` | Replace with the correct combinator |
 | Layer violation | Domain code importing infrastructure, handler containing business logic | Restructure to correct layer |
 | Config / env | `process.env` read outside loader, missing coercion | Move to `loadConfig` at entry point |
 | Logging | `console.*` in core, `cause` not logged before `apiErrorToResponse` | Use `Logger` port, log `cause` first |
@@ -175,14 +180,14 @@ const result = pipe(raw, flatMap(parseUser))
 
 ---
 
-### Nested `Option` — `mapO` where `flatMapO` needed
+### Nested `Option` — `mapOption` where `flatMapOption` needed
 
 ```ts
 // Bug — produces Option<Option<Email>>
-const email = pipe(user, mapO(u => u.email))  // u.email is Option<Email>
+const email = pipe(user, mapOption(u => u.email))  // u.email is Option<Email>
 
 // Fix
-const email = pipe(user, flatMapO(u => u.email))
+const email = pipe(user, flatMapOption(u => u.email))
 ```
 
 ---

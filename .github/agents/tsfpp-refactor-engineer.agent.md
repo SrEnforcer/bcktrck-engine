@@ -123,10 +123,11 @@ Parse the audit report. Build a todo list of all open violations grouped by slic
 For each slice with open violations:
 1. Read the file.
 2. Fix each violation using the strategy above.
-3. Run `pnpm tsc --noEmit` — the `PostToolUse` hook does this automatically after each edit. Fix any type errors before proceeding.
-4. Run `eslint <file>` and fix any new lint errors introduced by the refactor.
-5. Run the test suite for the affected module. Fix any regressions.
-6. Update the audit report: tick the resolved checklist items, move findings to a **Resolved** section, update the slice status to ✅ Fixed.
+3. After each fix, call `check_pattern({ code: <modified file> })` to confirm no mechanical violations were introduced.
+4. Run `pnpm tsc --noEmit` — the `PostToolUse` hook does this automatically after each edit. Fix any type errors before proceeding.
+5. Run `eslint <file>` and fix any new lint errors introduced by the refactor.
+6. Run the test suite for the affected module. Fix any regressions.
+7. Update the audit report: tick the resolved checklist items, move findings to a **Resolved** section, update the slice status to ✅ Fixed.
 
 **Step 3 — Cross-cutting changes**
 If a fix requires changing a shared type or utility used by other slices, note the dependency explicitly before making the change. Apply the change once, then re-verify all affected slices.
@@ -172,6 +173,7 @@ Final:
 
 - [ ] Every MUST violation from the report is either fixed or has a documented DEVIATION
 - [ ] No new violations introduced
+- [ ] `check_pattern` run on all modified files — zero mechanical violations reported
 - [ ] No types weakened (no `Option<T>` → `T | undefined`, no `readonly` stripped)
 - [ ] Typecheck, lint, and tests pass for all modified files
 - [ ] Audit report updated with final status

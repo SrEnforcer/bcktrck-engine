@@ -1,54 +1,18 @@
-name: Release Please
+name: release-please
 
-on:
+'on':
   push:
-    branches: [main]
-
-permissions:
-  contents: write
-  pull-requests: write
+    branches:
+      - main
 
 jobs:
   release-please:
     runs-on: ubuntu-latest
-    outputs:
-      releases_created: ${{ steps.release.outputs.releases_created }}
-      paths_released:   ${{ steps.release.outputs.paths_released }}
+    permissions:
+      contents: write
+      pull-requests: write
     steps:
       - uses: googleapis/release-please-action@v4
-        id: release
         with:
-          config-file:   release-please-config.json
+          config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
-
-  publish:
-    needs: release-please
-    if: ${{ needs.release-please.outputs.releases_created == 'true' }}
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write   # required for npm provenance
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: pnpm/action-setup@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          registry-url: https://registry.npmjs.org
-          cache: pnpm
-
-      - run: pnpm install --frozen-lockfile
-
-      - run: pnpm -r build
-
-      # Publish only packages that were released in this run.
-      # release-please sets paths_released as a JSON array of package paths.
-      - name: Publish released packages
-        run: |
-          echo '${{ needs.release-please.outputs.paths_released }}' \
-            | jq -r '.[]' \
-            | xargs -I{} pnpm --filter "./{}..." publish --access public --no-git-checks --provenance
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

@@ -8,15 +8,15 @@ Full standard: `node_modules/@tsfpp/standard/spec/API_CODING_STANDARD.md`
 Boundary API: `node_modules/@tsfpp/boundary/README.md`
 Extends: `tsfpp-base.instructions.md` — all base rules apply
 
-## Default handler shape — `createJsonHandler`
+## Default handler shape — `mkJsonHandler`
 
-Prefer `createJsonHandler` for all JSON POST/PUT/PATCH handlers. It handles
+Prefer `mkJsonHandler` for all JSON POST/PUT/PATCH handlers. It handles
 context extraction, Zod parsing, error lifting, and `apiErrorToResponse`
 automatically. Your `handle` function receives already-validated data.
 
 ```ts
 import {
-  createJsonHandler, type HandlerFactory,
+  mkJsonHandler, type HandlerFactory,
   createdResponse, withIdempotency, withRequestLog,
 } from '@tsfpp/boundary'
 import { err, isErr, ok, pipe } from '@tsfpp/prelude'
@@ -28,7 +28,7 @@ const createOrderBody = z.object({
 })
 
 export const createOrderHandler: HandlerFactory<Deps> = (deps) =>
-  createJsonHandler({
+  mkJsonHandler({
     deps,
     routeTemplate: '/v1/orders',
     schema: createOrderBody,
@@ -42,11 +42,11 @@ export const createOrderHandler: HandlerFactory<Deps> = (deps) =>
   })
 ```
 
-Use `createHandler` for handlers without a JSON body (GET, DELETE, health checks).
+Use `mkHandler` for handlers without a JSON body (GET, DELETE, health checks).
 
 ## Manual handler shape
 
-Only when `createJsonHandler` does not fit (multipart, streaming, early exits before parse):
+Only when `mkJsonHandler` does not fit (multipart, streaming, early exits before parse):
 
 ```ts
 export const handler: HandlerFactory<Deps> = (deps) => async (req) => {
@@ -72,7 +72,7 @@ All HTTP primitives come from `@tsfpp/boundary`. Never `new Response(...)`.
 
 ```ts
 import {
-  createJsonHandler, createHandler,
+  mkJsonHandler, mkHandler,
   parseJsonBody, parseJsonWithSchema,
   parsePaginationFromRequest, mkNextCursor,
   extractContext, fromZodError, apiErrorToResponse,
@@ -99,7 +99,7 @@ export const makeRoute = (deps: Deps, store: IdempotencyStore, logger: RequestLo
 ## Validation
 
 ```ts
-// Inside createJsonHandler — already handled, body is typed
+// Inside mkJsonHandler — already handled, body is typed
 handle: async ({ body }) => { /* body is z.infer<typeof schema> */ }
 
 // Manual — always safeParse, never parse (throws)
@@ -123,7 +123,7 @@ return apiErrorToResponse(result.error, ctx)
 throw new Error('not found')
 ```
 
-## `mkProblem` — object form (v1.2.0)
+## `mkProblem` — object form (v2.0.0)
 
 ```ts
 // Yes — object argument form

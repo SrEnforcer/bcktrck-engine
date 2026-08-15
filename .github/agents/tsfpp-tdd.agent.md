@@ -41,6 +41,12 @@ Full coding standard: `node_modules/@tsfpp/standard/spec/CODING_STANDARD.md`
 Load and apply the `/test-standard` skill. Every test you write must conform to
 all rules in that skill. Do not write a single test before the skill is loaded.
 
+If uncertain about the correct test pattern for this layer, call:
+`get_pattern({ concept: '<what you are testing>' })`
+
+For example: `get_pattern({ concept: 'Result assertion' })` or
+`get_pattern({ concept: 'smart constructor test' })`.
+
 ---
 
 ## Session start

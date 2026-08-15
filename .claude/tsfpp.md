@@ -88,9 +88,9 @@ const findTrack = (id: TrackId): Promise<Result<Track, DbError>> =>
 ```ts
 const result = pipe(
   input,
-  mapO(transform),
-  flatMapO(validate),
-  getOrElse(() => fallback),
+  mapOption(transform),
+  flatMapOption(validate),
+  getOrElseOption(() => fallback),
 )
 ```
 
@@ -100,7 +100,7 @@ If a rule genuinely cannot be followed, add `// DEVIATION(N.M): <one-line reason
 
 ## Agents
 
-The following agents are available in `ai/agents/` and are exported to `.github/agents/` for Copilot compatibility:
+The following agents are available in `.ai/agents/` and are exported to `.github/agents/` for Copilot compatibility:
 
 | Agent | Purpose |
 |-------|---------|

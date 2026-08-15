@@ -354,7 +354,7 @@ Cross-cutting — applies to all layers. Check for hand-rolled patterns that `@t
 | Anti-pattern | Violation | Should be |
 |---|---|---|
 | `if (x === undefined)` / `if (x !== undefined)` / `if (x === null)` / `if (x !== null)` / `if (!x)` | MUST | `fromNullable(x)` → `Option<T>`; use `isSome` / `isNone` to branch |
-| `x ?? fallback` | MUST | `pipe(x, fromNullable, getOrElse(() => fallback))` |
+| `x ?? fallback` | MUST | `pipe(x, fromNullable, getOrElseOption(() => fallback))` |
 | `try/catch` outside adapter boundary | MUST | `tryCatch` / `tryCatchAsync` |
 | `.map()` on a fallible function | MUST | `traverseArray` |
 | `new Map()` | MUST | `intoMap([...])` |
@@ -362,14 +362,14 @@ Cross-cutting — applies to all layers. Check for hand-rolled patterns that `@t
 | `result._tag === 'Ok'` | MUST | `isOk(result)` |
 | `option._tag === 'Some'` | MUST | `isSome(option)` |
 | `Result<void, E>` | MUST | `Result<Unit, E>` with `ok(unit)` |
-| Manual null-coalescing guard | SHOULD | `getOrElse` / `orElse` |
+| Manual null-coalescing guard | SHOULD | `getOrElseOption` / `orElseOption` |
 | Side effect breaking `pipe` chain | SHOULD | `tap` / `tapErr` |
-| Manual `if/else` for Option fallback | SHOULD | `orElse` / `getOrElse` |
+| Manual `if/else` for Option fallback | SHOULD | `orElseOption` / `getOrElseOption` |
 
 Checklist:
 
-- [ ] No nullability checks in any form — `if (x === undefined)`, `if (x !== undefined)`, `if (x === null)`, `if (x !== null)`, `if (!x)`, `x ?? y` — use `fromNullable` / `getOrElse` / `isSome`
-- [ ] No `x ?? fallback` — use `getOrElse`
+- [ ] No nullability checks in any form — `if (x === undefined)`, `if (x !== undefined)`, `if (x === null)`, `if (x !== null)`, `if (!x)`, `x ?? y` — use `fromNullable` / `getOrElseOption` / `isSome`
+- [ ] No `x ?? fallback` — use `getOrElseOption`
 - [ ] No `try/catch` outside adapter boundaries — use `tryCatch`/`tryCatchAsync`
 - [ ] No `.map()` on fallible function — use `traverseArray`
 - [ ] No `new Map()` / `new Set()` — use `intoMap` / `intoSet`
@@ -486,6 +486,8 @@ All focus areas in sequence.
 **Step 1 — Inventory**
 List all files in scope. Group into logical slices (≤ 300 LOC per slice, or one cohesive module). Populate the slice index table in the report.
 
+For each file, call `check_pattern({ code })` on the file contents for a baseline mechanical violation scan before applying the manual checklist.
+
 **Step 2 — Create report**
 Write `docs/audits/<target-slug>-<focus>-<YYYYMMDD-HHmm>.md` with the template above before touching any source file.
 Example: `docs/audits/src-domain-prelude-20260517-1430.md` or `docs/audits/src-all-20260517-0900.md`.
@@ -494,18 +496,20 @@ Example: `docs/audits/src-domain-prelude-20260517-1430.md` or `docs/audits/src-a
 
 **Step 3 — Inspect slice by slice**
 For each slice:
-1. Read the file(s).
-2. Determine which checklists apply:
+1. Call `check_pattern({ code: <file contents> })` — captures all mechanical violations deterministically.
+2. Call `get_layer({ layer })` to get the full constraint set for the active layer.
+3. Read the file(s).
+4. Determine which checklists apply:
    - **Always:** base checklist including the `annotations` and `security` sections — every slice, every focus
    - React checklist for `.tsx` files under `react` or `all` focus
    - Data checklist for files in `infrastructure/`, `dal/`, `repository/` under `data` or `all` focus
    - Test checklist for `*.test.ts` / `*.test.tsx` under `test` or `all` focus
    - Prelude checklist for all files under `prelude` or `all` focus
-3. Check every rule in the active focus set.
-4. Record all findings (rule · line · severity · description).
-5. Fill in the checklist.
-6. Append the completed slice section to the report.
-7. Update the slice status in the index table.
+5. Apply the manual checklist for patterns `check_pattern` cannot detect (ADT design, exhaustiveness, pipeline structure, naming conventions).
+6. Record all findings (rule · line · severity · description).
+7. Fill in the checklist.
+8. Append the completed slice section to the report.
+9. Update the slice status in the index table.
 
 **Step 4 — Summarise**
 After all slices: fill in the Summary table · set Status to ✅ Complete or ⚠️ Violations found · list the top 3 highest-priority issues.
@@ -528,5 +532,6 @@ After all slices: fill in the Summary table · set Status to ✅ Complete or ⚠
 - Report what you find. Do not silently skip rules.
 - Do not fix violations unless explicitly asked.
 - Do not invent violations. Quote the exact offending construct and its line number.
-- A `// DEVIATION(N.M): <reason>` at the violation site converts MUST → NOTE; record it in the deviation register.
+- A DEVIATION comment must follow the exact format produced by `get_deviation({ ruleId, reason })`; never hand-write DEVIATION format.
+- A valid DEVIATION at the violation site converts MUST → NOTE; record it in the deviation register.
 - If a file cannot be read, mark the slice ❌ Unreadable and continue.

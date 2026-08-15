@@ -1,6 +1,6 @@
-# TSF++ coding standard — v1.1.0
+# TSF++ coding standard — v5.0.0
 
-Standard version: 1.1.0 (2026-05-15). When this skill and the full `CODING_STANDARD.md` conflict, the file wins.
+Standard version: 5.0.0 (2026-07-26). When this skill and the full `CODING_STANDARD.md` conflict, the file wins.
 
 ---
 
@@ -23,43 +23,48 @@ truthiness checks on non-booleans  (if (str) · if (value))
 optional params ?  → use Option<T> or a defaults record
 default:      in an exhaustive switch  → use absurd(x)
 direct _tag comparison outside @tsfpp/prelude  → use exported guards
-import from 'ramda'  → use @tsfpp/prelude
+import from 'ramda' / 'lodash'  → use @tsfpp/prelude (Remeda is the *recommended*, optional, collection lib — not a dep)
+Number()·parseInt·parseFloat·unary +  in core  → parse at boundary; brand numerics (Rule 1.13)
+NaN·Infinity leak; global isNaN·isFinite  → use Number.isNaN·Number.isFinite (Rule 1.13)
+Date.now·new Date()·Math.random·crypto.randomUUID·process.env  in core  → inject via Deps (Rule 4.6)
+string·Error as a domain error channel  → use a kind-tagged union (Rule 6.7)
+=== · !== · .includes() on non-primitives  → reference equality! pass an Eq (Rule 4.7)
+.sort() without a comparator  → string coercion; use sortWith(ord) (Rule 4.7)
+.map()·.sort()·.reverse() on a NonEmpty* value  → widens and discards the proof; use mapNonEmpty etc. (Rule 1.15)
+create* constructor prefix  → use mk* (Rule 7.3)
 ```
 
 ---
 
-## Hard rules (all layers)
+## Hard rules
 
-| Rule | Level | Constraint |
-|------|-------|-----------|
-| 1.1 | MUST | Sum types: tagged discriminated union with a literal discriminant |
-| 1.2 | MUST | Exhaustive `switch` ends in `default: return absurd(x)` |
-| 1.3 | MUST | Nominal distinctions via branded types; only smart constructors (`mk*`, `from*`, `as*`) |
-| 1.4 | MUST | `type` aliases; `interface` requires `// DEVIATION(1.4): <reason>` |
-| 1.5 | MUST | No `any`; `unknown` at I/O boundaries, narrowed in scope |
-| 1.6 | MUST | No `!`; no `as` outside smart constructor bodies |
-| 1.8 | MUST | No `enum`; string literal unions or `as const` |
-| 1.9 | MUST | No `class` · `this` · `new` · `instanceof` · `namespace` |
-| 1.11 | MUST | Access prelude ADT discriminants via exported guards only (`isOk`, `isSome`, …) |
-| 1.12 | MUST | Discriminant convention: `_tag` for prelude/library ADTs · `kind` for domain ADTs |
-| 2.1 | MUST | `const` only; no `let`/`var` |
-| 2.2 | MUST | `ReadonlyArray<T>` everywhere |
-| 2.3 | MUST | No mutating methods or property assignment |
-| 2.5 | MUST | `as const` for literal narrowing and config tables |
-| 3.x | MUST | `readonly` on every record field |
-| 4.1 | MUST | Every sum-type `switch` exhaustive; `default: return absurd(x)` |
-| 4.5 | MUST | Strict equality only; no truthiness on non-booleans |
-| 5.1 | MUST | Pipelines via `pipe` from `@tsfpp/prelude` |
-| 6.2 | MUST | `throw` only in adapter boundaries; wrap with `tryCatch`/`tryCatchAsync` |
-| 6.3 | MUST | No `null`/`undefined` propagation; use `Option<A>` |
-| 6.6 | MUST | Prefer `Promise.allSettled` over `Promise.all` when partial failure is meaningful |
-| 7.x | MUST | JSDoc on every exported symbol; algebraic laws for combinators |
-| 8.4 | MUST | Parse, don't validate: convert `unknown` to domain types at the boundary |
-| 9.6 | MUST | Pre-commit hooks enforce lint and typecheck |
-| 11.1 | MUST | One type, one file; related constructors co-located |
-| 11.2 | MUST | File ≤ 400 lines; 800 absolute maximum with deviation |
+For the complete rule set, call `get_layer({ layer })`.
+For a specific rule, call `get_rule({ id })`.
 
-**Size limits:** function body ≤ 40 lines · cyclomatic complexity ≤ 10 · nesting depth ≤ 4.
+Critical rules always in context:
+- 1.12 — `_tag` for prelude ADTs · `kind` for domain ADTs
+- 1.13 — No numeric coercion / `NaN` in core; brand constrained numerics (`Int`/`Positive`/`NonNegative`)
+- 1.14 — Prefer `satisfies` over `as` for literal conformance
+- 1.15 — Keep a refinement across transformation: `mapNonEmpty`/`sortNonEmpty`, never `.map()`/`.sort()` on a proven value (which widens and throws the proof away)
+- 4.1 — Every exhaustive `switch` ends in `default: return absurd(x)`
+- 4.6 — No ambient clock/entropy/env in core — inject via `Deps`
+- 4.7 — `===` on non-primitives is REFERENCE equality; pass an explicit `Eq`/`Ord` (`uniqueWith`, `elemWith`, `sortWith`)
+- 6.3 — No `null`/`undefined` — use `Option<A>`
+- 6.7 — Error channels are `kind`-tagged unions, never `string`/`Error`
+- 6.8 — Independent checks that must all be reported use `Validation` (accumulates); dependent steps use `Result` (short-circuits)
+- 7.8 — `Result` combinators unsuffixed; other ADTs suffixed by full type name (`mapOption`, `headNonEmpty`)
+- 8.5 — Collapse `Option`/`Result` with a total `match` when both arms yield a value
+- 11.5 — Dependencies point INWARD only; core imports no adapter/transport/`node:*` — define a port, inject at the root
+- 11.6 — No module-level side effects; importing a module only defines bindings
+
+## Size limits
+
+| Metric | Limit |
+|---|---|
+| Function body | ≤ 40 lines |
+| Cyclomatic complexity | ≤ 10 |
+| Nesting depth | ≤ 4 |
+| File size | ≤ 400 LOC (800 max with deviation) |
 
 ---
 

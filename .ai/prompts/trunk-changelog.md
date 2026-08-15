@@ -105,7 +105,7 @@ Append the new entry under `## [Unreleased]`, grouped by type in this order:
 - `feat!(boundary)!: remove legacy `fold` export` — consumers must migrate to `map`/`flatMap`
 
 ### Features
-- `feat(prelude): add ReadonlyMap combinators` — `intoMap`, `assoc`, `dissoc`, `lookup`, `entriesOfMap`
+- `feat(prelude): add ReadonlyMap combinators` — `intoMap`, `assoc`, `dissoc`, `lookup`, `entriesOf`
 
 ### Bug fixes
 - `fix(agents): init.mjs fails with ReferenceError when run with --yes`

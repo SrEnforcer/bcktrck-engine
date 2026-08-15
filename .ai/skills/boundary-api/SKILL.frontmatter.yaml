@@ -1,7 +1,7 @@
 name: boundary-api
 description: >
-  Complete API surface of @tsfpp/boundary v1.2.0: typed request context, handler
-  helpers (createJsonHandler, createHandler, parseJsonBody), RFC 9457 error
+  Complete API surface of @tsfpp/boundary v2.0.0: typed request context, handler
+  helpers (mkJsonHandler, mkHandler, parseJsonBody), RFC 9457 error
   responses, ApiError taxonomy, response builders, cursor pagination, long-running
   operations, bulk operations, idempotency, observability middleware, webhook
   signing, rate-limit headers, CORS, cache policy, loadConfig, and Node.js dev

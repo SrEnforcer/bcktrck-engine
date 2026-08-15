@@ -20,26 +20,18 @@ All combinators are curried data-last and compose with `pipe`.
 import { pipe, ok, err, some, none, ... } from '@tsfpp/prelude';
 ```
 
-Never import from `ramda` directly. Never import sub-paths.
+Never import sub-paths. Ramda is **not** a dependency (removed in standard v1.1.0): `@tsfpp/prelude` covers the ADTs and core combinators. For collection plumbing the standard *recommends* Remeda, but it is **not** a dependency of these packages — a project may add it if needed; do not assume it is present.
+
+### Naming convention (Rule 7.8)
+
+`Result` is the **base** ADT — its combinators are unsuffixed (`map`, `flatMap`, `getOrElse`, `match`, `mapErr`, `tap`). Every other ADT carries its full type name as a suffix: `mapOption` / `getOrElseOption` / `matchOption` (Option), `mapList` (List), `headNonEmpty` (NonEmpty). There is no abbreviated (`mapO`) or single-letter (`getOrElseR`) form. So bare `getOrElse` collapses a **`Result`**; `getOrElseOption` collapses an `Option`.
 
 ---
 
-## Core exports
+## Full API surface
 
-| Group | Exports |
-|---|---|
-| Combinators | `pipe`, `flow`, `comp`, `complement` |
-| Exhaustiveness | `absurd` |
-| Option | `some`, `none`, `isSome`, `isNone`, `mapO`, `flatMapO`, `orElse`, `getOrElse` |
-| Result | `ok`, `err`, `isOk`, `isErr`, `map`, `flatMap`, `flatMapAsync`, `tryCatch`, `tryCatchAsync`, `tap`, `tapErr` |
-| Unit | `unit`, `Unit` |
-| Guards / conversions | `fromNullable`, `toNullable`, `isRecord`, `fromUnknownString`, `fromUnknownArray`, `fromUnknownArrayOf`, `fromNonEmptyString` |
-| Record decoding | `UnknownRecord`, `getStringField`, `getNumberField`, `getBooleanField`, `getTypedField` |
-| Branded types | `Brand`, `Every`, `Any`, `mkEvery`, `mkAny` |
-| Collections | `traverseArray`, `traverseArrayO`, `sequenceArrayO`, `unique` |
-| List ADT | `List`, `nil`, `cons`, `singletonList`, `isCons`, `isNil`, `fromArray`, `toArray`, `headList`, `tailList`, `isEmptyList`, `lengthList`, `mapList`, `flatMapList`, `appendList`, `reverseList`, `filterList`, `foldList`, `foldLeftList`, `foldLeftListCurried`, `traverseList` |
-| ReadonlyMap | `intoMap`, `entriesOfMap`, `assoc`, `dissoc`, `lookup` |
-| ReadonlySet | `intoSet`, `conj`, `disj`, `member` |
+For the complete, version-accurate export list:
+`get_api_surface({ package: '@tsfpp/prelude' })`
 
 ---
 
@@ -47,8 +39,8 @@ Never import from `ramda` directly. Never import sub-paths.
 
 ### `map` vs `flatMap`
 
-- Transformation **cannot fail** → `map` / `mapO`
-- Transformation **can fail or be absent** → `flatMap` / `flatMapO`
+- Transformation **cannot fail** → `map` / `mapOption`
+- Transformation **can fail or be absent** → `flatMap` / `flatMapOption`
 - Mismatching produces `Result<Result<T,E>,E>` or `Option<Option<T>>` — always wrong.
 
 ```ts
@@ -56,10 +48,70 @@ const upper = map((s: string) => s.toUpperCase())(name);   // cannot fail
 const valid = flatMap(validateEmail)(input);                // can fail
 ```
 
-### `orElse` vs `getOrElse`
+### Combining — Semigroup / Monoid
 
-- Keep `Option` context → `orElse(() => some(fallback))`
-- Collapse to concrete value → `getOrElse(() => fallback)`
+`Eq` = "are these the same?", `Ord` = "which comes first?", `Monoid` = "how do
+two combine?". The identity element makes folding an empty collection total.
+
+```ts
+concatAll(monoidSum)([]);                                   // 0 — no Option needed
+foldMap(monoidSum)((o: Order) => o.seats)(orders);          // sum of a projection
+foldMap(monoidAny)((o: Order) => mkAny(o.overdue))(orders); // "is any overdue?"
+```
+
+`monoidEvery` / `monoidAny` are distinct types on purpose — their identities are
+`true` and `false`, so the wrong choice silently inverts the empty-collection result.
+`semigroupFirst`/`Last`/`Max`/`Min` are Semigroups (no identity exists).
+
+### Equality and ordering (Rule 4.7)
+
+`===` on any non-primitive is **reference** equality. Pass an explicit `Eq`:
+
+```ts
+const eqUser = eqBy((u: User) => u.id, eqNumber);  // equality is identity of the key
+uniqueWith(eqUser)(users);                          // not unique() — that is reference-based
+elemWith(eqUser)(target)(users);                    // not .includes()
+sortWith(ordBy((u: User) => u.age, ordNumber))(users); // sorts a copy, explicit comparator
+```
+
+`eqStructural()` compares plain data by contents; `eqStrict()` keeps `===` where it is correct.
+`maxWith`/`minWith` take a `NonEmptyReadonlyArray` and are total.
+
+### Keep the non-empty proof (`NonEmptyReadonlyArray`)
+
+`.map()` on a proven non-empty array returns a plain `ReadonlyArray` — the proof is
+discarded and every later `head` is back to `Option`. Use the preserving combinators:
+
+```ts
+mapNonEmpty(f)(xs);                          // not xs.map(f)
+sortNonEmpty(ordNumber)(xs);                 // not [...xs].sort()
+reverseNonEmpty(xs); concatNonEmpty(ys)(xs); // append/prependNonEmpty too
+headNonEmpty(xs);                            // A, not Option<A>
+reduceNonEmpty<number>((a, b) => a + b)(xs); // stdlib reduce w/o a seed THROWS on []
+traverseNonEmpty(parseFoo)(xs);              // Result<NonEmptyReadonlyArray<Foo>, E>
+```
+
+`reduceNonEmpty` is the payoff: a partial stdlib function made total by the type.
+`tailNonEmpty` deliberately returns a plain array — the tail of `[a]` *is* empty.
+`semigroupNonEmpty()` is a Semigroup, never a Monoid — no empty non-empty array exists.
+
+### `Result` vs `Validation` (Rule 6.8)
+
+- Next step needs the previous step's value → `Result` (short-circuits on first `Err`)
+- Independent checks, caller must see every failure → `Validation` (accumulates)
+
+```ts
+// Reports EVERY bad field, not just the first:
+const v = sequenceStructValidation({ name: parseName(raw), email: parseEmail(raw) });
+```
+
+`Validation` has no `flatMap` by design — independence is what licenses accumulation.
+Cross back with `validationToResult` / `resultToValidation`.
+
+### `orElseOption` vs `getOrElseOption`
+
+- Keep `Option` context → `orElseOption(() => some(fallback))`
+- Collapse to concrete value → `getOrElseOption(() => fallback)`
 
 ### `pipe` vs `flow`
 
@@ -165,15 +217,15 @@ const all = traverseArray(parseFoo)(rawItems); // Result<ReadonlyArray<Foo>, E>
 // Never: rawItems.map(parseFoo) — produces ReadonlyArray<Result<Foo,E>>
 ```
 
-### `traverseArrayO` / `sequenceArrayO` — collect only if every element is `Some`
+### `traverseArrayOption` / `sequenceArrayOption` — collect only if every element is `Some`
 
 ```ts
-traverseArrayO(fromNullable)([1, 2, 3]);    // Some([1, 2, 3])
-traverseArrayO(fromNullable)([1, null, 3]); // None
+traverseArrayOption(fromNullable)([1, 2, 3]);    // Some([1, 2, 3])
+traverseArrayOption(fromNullable)([1, null, 3]); // None
 
-// Already have ReadonlyArray<Option<A>>? Use sequenceArrayO directly:
-sequenceArrayO([some(1), some(2)]); // Some([1, 2])
-sequenceArrayO([some(1), none]);    // None
+// Already have ReadonlyArray<Option<A>>? Use sequenceArrayOption directly:
+sequenceArrayOption([some(1), some(2)]); // Some([1, 2])
+sequenceArrayOption([some(1), none]);    // None
 ```
 
 ### `fromUnknownArrayOf` — guard typed arrays from unknown
@@ -191,13 +243,13 @@ const strings = fromUnknownArrayOf(
 Always construct maps with `intoMap`. Never call `new Map()` directly.
 
 ```ts
-import { intoMap, entriesOfMap, assoc, dissoc, lookup } from '@tsfpp/prelude';
+import { intoMap, entriesOf, assoc, dissoc, lookup } from '@tsfpp/prelude';
 
 const m  = intoMap([['a', 1], ['b', 2]]); // ReadonlyMap<string, number>
 const v  = pipe(m, lookup('a'));           // Some(1)
 const m2 = pipe(m, assoc('c', 3));        // insert or replace
 const m3 = pipe(m2, dissoc('a'));          // remove
-const es = entriesOfMap(m);               // ReadonlyArray<readonly [string, number]>
+const es = entriesOf(m);               // ReadonlyArray<readonly [string, number]>
 ```
 
 ---
