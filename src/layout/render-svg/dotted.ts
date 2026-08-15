@@ -7,7 +7,7 @@
  */
 
 import type { DottedEdge } from '../../types/org-tree'
-import { fromNullable, getOrElse, isNone, isSome, mapO, pipe } from '@tsfpp/prelude'
+import { fromNullable, getOrElseOption, isNone, isSome, mapOption, mkNonEmpty, ordNumber, pipe, reduceNonEmpty, semigroupMax, semigroupMin } from '@tsfpp/prelude'
 import type { PlacedTree, PlacedStaff, RenderConfig } from '../types'
 import { emptyRenderBounds, escapeXml, expandBoundsWithPoints, getNodeBounds, type NodeBounds, type RenderBounds, type SvgPoint } from './shared'
 
@@ -110,7 +110,7 @@ type RenderDottedEdgesInput = {
 const numberOrDefault = (value: number | undefined, fallback: number): number =>
   pipe(
     fromNullable(value),
-    getOrElse(() => fallback)
+    getOrElseOption(() => fallback)
   )
 
 const incrementCount = (counts: DottedEdgeCounts, key: string): DottedEdgeCounts => ({
@@ -148,11 +148,11 @@ const getLabelAnchorForPolyline = (points: readonly SvgPoint[]): SvgPoint => {
 
   const first = pipe(
     fromNullable(points[0]),
-    getOrElse(() => ({ x: 0, y: 0 }))
+    getOrElseOption(() => ({ x: 0, y: 0 }))
   )
   const last = pipe(
     fromNullable(points[points.length - 1]),
-    getOrElse(() => first)
+    getOrElseOption(() => first)
   )
   return {
     x: (first.x + last.x) / 2,
@@ -183,11 +183,11 @@ const renderDottedEdgeElements = (input: RenderDottedEdgeElementsInput): DottedR
   const toKey = String(input.edge.to)
   const dottedLabelElements = pipe(
     fromNullable(input.edge.label),
-    mapO((label) => label.length > 0
+    mapOption((label) => label.length > 0
       ? [dottedLabelElement({ label, points: input.points, cfg: input.cfg, safeCfg: input.safeCfg })]
       : []
     ),
-    getOrElse<readonly string[]>(() => [])
+    getOrElseOption<readonly string[]>(() => [])
   )
   const nextEdgeElements = [
     ...input.state.edgeElements,
@@ -379,11 +379,21 @@ const sameRowDetourRoute = (input: SameRowDetourInput): readonly SvgPoint[] => {
     return Math.max(minX, xSpan.minX) < Math.min(maxX, xSpan.maxX)
   })
 
-  const blockerTop = blockersInCorridor.reduce((acc, bounds) => Math.min(acc, boundsYSpan(bounds).minY), Number.POSITIVE_INFINITY)
-  const blockerBottom = blockersInCorridor.reduce((acc, bounds) => Math.max(acc, boundsYSpan(bounds).maxY), Number.NEGATIVE_INFINITY)
+  const blockerMinYsOption = mkNonEmpty(blockersInCorridor.map((bounds) => boundsYSpan(bounds).minY))
+  const blockerMaxYsOption = mkNonEmpty(blockersInCorridor.map((bounds) => boundsYSpan(bounds).maxY))
 
-  const channelAbove = Number.isFinite(blockerTop) ? Math.min(aboveCandidate, blockerTop - input.routeMargin) : aboveCandidate
-  const channelBelow = Number.isFinite(blockerBottom) ? Math.max(belowCandidate, blockerBottom + input.routeMargin) : belowCandidate
+  const channelAbove = pipe(
+    blockerMinYsOption,
+    mapOption(reduceNonEmpty(semigroupMin(ordNumber).concat)),
+    mapOption((blockerTop) => Math.min(aboveCandidate, blockerTop - input.routeMargin)),
+    getOrElseOption(() => aboveCandidate)
+  )
+  const channelBelow = pipe(
+    blockerMaxYsOption,
+    mapOption(reduceNonEmpty(semigroupMax(ordNumber).concat)),
+    mapOption((blockerBottom) => Math.max(belowCandidate, blockerBottom + input.routeMargin)),
+    getOrElseOption(() => belowCandidate)
+  )
 
   const chooseAbove = Math.abs(channelAbove - input.start.y) <= Math.abs(channelBelow - input.start.y)
   const channelY = chooseAbove ? channelAbove : channelBelow

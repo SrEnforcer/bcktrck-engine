@@ -6,17 +6,17 @@
  * @packageDocumentation
  */
 
-import { fromNullable, getOrElse, isNone } from '@tsfpp/prelude'
+import { fromNullable, getOrElseOption, isNone } from '@tsfpp/prelude'
 import { token } from './combinators'
 import type { Token } from '../lexer/tokens'
 import type { AstAttr, AstAttrValue, AstLayoutHint, AstLayoutHintKind, AstNodeKind, AstVisualDirective } from '../types/ast'
 import type { ParseResult } from '../types/results'
 
 const lineOr = (tokenValue: Token | undefined, fallback: number): number =>
-  getOrElse<number>(() => fallback)(fromNullable(tokenValue?.line))
+  getOrElseOption<number>(() => fallback)(fromNullable(tokenValue?.line))
 
 const colOr = (tokenValue: Token | undefined, fallback: number): number =>
-  getOrElse<number>(() => fallback)(fromNullable(tokenValue?.col))
+  getOrElseOption<number>(() => fallback)(fromNullable(tokenValue?.col))
 
 /**
  * Resolve a token kind or `eof` when the token is absent.
@@ -25,7 +25,7 @@ const colOr = (tokenValue: Token | undefined, fallback: number): number =>
  * @returns Concrete token kind or `eof`.
  */
 export const kindOrEof = (tokenValue: Token | undefined): Token['kind'] | 'eof' =>
-  getOrElse<Token['kind'] | 'eof'>(() => 'eof')(fromNullable(tokenValue?.kind))
+  getOrElseOption<Token['kind'] | 'eof'>(() => 'eof')(fromNullable(tokenValue?.kind))
 
 /**
  * Resolve a token source position with 1-based fallbacks.

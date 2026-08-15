@@ -14,10 +14,10 @@
 
 // DEVIATION(2.4): Shadow rendering remains co-located to preserve connector and label alignment behavior.
 
-import { fromNullable, getOrElse, intoMap, isNone, pipe } from '@tsfpp/prelude'
+import { findO, fromNullable, getOrElseOption, intoMap, isNone, mapOption, pipe } from '@tsfpp/prelude'
 import type { ShadowNode } from '../../types/org-tree'
 import type { ResolvedNodeStyle, ResolvedStyleMap, ResolvedTextStyles } from '../../style/dsl'
-import type { IndexedTree, PlacedTree, PlacedStaff, RenderConfig } from '../types'
+import type { IndexedTree, PlacedTree, PlacedStaff, RenderConfig, StaffPosition } from '../types'
 import { buildStyledLabelLines, composeShadowLabel, fitFontSizeToBox, renderStyledLabelElement, toTextStyle } from './text'
 import {
   boundsFromRect,
@@ -172,7 +172,7 @@ const resolveStaffShadowPlacement = (
         ? (parentBottomY + nearestChildTopY) / 2
         : hostPos.y + input.cfg.nodeSize / 2
 
-      const side = pipe(fromNullable(input.shadow.side), getOrElse(() => 'right'))
+      const side = pipe(fromNullable(input.shadow.side), getOrElseOption(() => 'right'))
       const direction = side === 'left' ? -1 : 1
       const baseOffset = (input.cfg.nodeSize + input.cfg.staffSize) / 2 + 0.05
       const parentCenterX = hostPos.x + input.cfg.nodeSize / 2
@@ -204,13 +204,13 @@ const resolveStaffShadowPlacement = (
       cfg: input.cfg,
       shadowBoundsMap: undefined
     })
-  const anchorBoundsOption = fromNullable(pipe(fromNullable(hostAnchor), getOrElse(() => input.primaryPos)))
+  const anchorBoundsOption = fromNullable(pipe(fromNullable(hostAnchor), getOrElseOption(() => input.primaryPos)))
   if (isNone(anchorBoundsOption)) {
     return undefined
   }
   const anchorBounds = anchorBoundsOption.value
 
-  const side = pipe(fromNullable(input.shadow.side), getOrElse(() => 'right'))
+  const side = pipe(fromNullable(input.shadow.side), getOrElseOption(() => 'right'))
   const gap = input.cfg.colWidth * STAFF_SHADOW_EDGE_GAP_RATIO
   const x = side === 'left'
     ? anchorBounds.cx - anchorBounds.w / 2 - gap - input.dimensions.w
@@ -297,7 +297,7 @@ const resolveShadowPlacement = (
   })
   return pipe(
     fromNullable(staffPlacement),
-    getOrElse(() => resolveGenericShadowPlacement({
+    getOrElseOption(() => resolveGenericShadowPlacement({
       shadow: input.shadow,
       placed: input.placed,
       cfg: input.cfg,
@@ -313,17 +313,18 @@ const renderShadowLabelElement = (
 ): string => {
   const primaryId = String(input.shadow.primary)
   const primaryNode = input.tree.nodes.get(primaryId)
-  const primaryStaff = input.staff.staff.find((entry) => entry.id === primaryId)
+  const primaryStaffOption = findO((entry: StaffPosition) => entry.id === primaryId)(input.staff.staff)
   const primaryLabel = pipe(
     fromNullable(primaryNode?.label),
-    getOrElse(() => pipe(
-      fromNullable(primaryStaff?.label),
-      getOrElse(() => input.tree.staffLabels?.get(primaryId))
+    getOrElseOption(() => pipe(
+      primaryStaffOption,
+      mapOption((entry) => entry.label),
+      getOrElseOption(() => input.tree.staffLabels?.get(primaryId))
     ))
   )
   const primaryLabelOption = fromNullable(primaryLabel)
   const shadowLabelText = isNone(primaryLabelOption)
-    ? pipe(fromNullable(input.shadow.label), getOrElse(() => String(input.shadow.id)))
+    ? pipe(fromNullable(input.shadow.label), getOrElseOption(() => String(input.shadow.id)))
     : composeShadowLabel(primaryLabelOption.value, input.shadow.label)
   const shadowBaseFont = Math.max(1, input.cfg.fontSize * input.cfg.shadowFontScale)
   const maxCharsPerLine = Math.max(8, Math.floor((input.placement.w - 10) / (shadowBaseFont * 0.52)))
@@ -352,17 +353,17 @@ const renderShadowRectElement = (
 ): string => {
   const backgroundColor = pipe(
     fromNullable(input.placement.shadowStyle?.backgroundColor),
-    getOrElse(() => input.safeCfg.employeeFill)
+    getOrElseOption(() => input.safeCfg.employeeFill)
   )
   const borderColor = pipe(
     fromNullable(input.placement.shadowStyle?.borderColor),
-    getOrElse(() => input.safeCfg.nodeBorder)
+    getOrElseOption(() => input.safeCfg.nodeBorder)
   )
   const strokeAttr = input.placement.shadowStyle?.borderStyle === 'none'
     ? ''
     : ` stroke="${escapeXml(borderColor)}"`
 
-  return `<rect id="${escapeXml(input.shadow.id)}" class="shadow" x="${input.placement.x}" y="${input.placement.y}" width="${input.placement.w}" height="${input.placement.h}" fill="${escapeXml(backgroundColor)}"${strokeAttr}${strokeWidthAttr(pipe(fromNullable(input.placement.shadowStyle?.borderWidth), getOrElse(() => 1)))} opacity="${input.cfg.shadowOpacity}"${rectStrokeStyleAttrs(input.placement.shadowStyle)} />`
+  return `<rect id="${escapeXml(input.shadow.id)}" class="shadow" x="${input.placement.x}" y="${input.placement.y}" width="${input.placement.w}" height="${input.placement.h}" fill="${escapeXml(backgroundColor)}"${strokeAttr}${strokeWidthAttr(pipe(fromNullable(input.placement.shadowStyle?.borderWidth), getOrElseOption(() => 1)))} opacity="${input.cfg.shadowOpacity}"${rectStrokeStyleAttrs(input.placement.shadowStyle)} />`
 }
 
 const shadowEdgeAttachPoint = (

@@ -10,7 +10,7 @@
 import { readFile } from 'fs/promises'
 import { resolve } from 'path'
 import { pathToFileURL } from 'url'
-import { fromNullable, getStringField, isErr, isNone, isRecord, isSome, tryCatchAsync } from '@tsfpp/prelude'
+import { fromNullable, getStringField, isErr, isNone, isRecord, isSome, matchOption, tryCatchAsync } from '@tsfpp/prelude'
 import { compile } from './compile.js'
 import type { ResolveError } from './types/results.js'
 
@@ -39,7 +39,7 @@ const formatResolveErrors = (errors: readonly ResolveError[]): string =>
     .map((error) => {
       const location = `${error.line}:${error.col}`
       const suggestionOption = fromNullable(error.suggestion)
-      const suggestion = isSome(suggestionOption) ? ` (did you mean @${suggestionOption.value}?)` : ''
+      const suggestion = matchOption(() => '', (value: string) => ` (did you mean @${value}?)`)(suggestionOption)
       return `- [${location}] ${error.message}${suggestion}`
     })
     .join('\n')
@@ -52,7 +52,7 @@ const errorMessage = (error: unknown): string => {
     return String(error)
   }
   const message = getStringField(error, 'message')
-  return isSome(message) ? message.value : String(error)
+  return matchOption(() => String(error), (value: string) => value)(message)
 }
 
 const writeCompileFailure = (result: Extract<ReturnType<typeof compile>, { readonly ok: false }>, io: CliIo): number => {
@@ -95,7 +95,7 @@ export const runCli = async (args: readonly string[], io: CliIo = defaultIo): Pr
   const includeBuildInfo = normalizedArgs.includes('--build-info')
   const positionalArgs = normalizedArgs.filter((arg) => arg !== '--build-info')
   const filePathOption = fromNullable(positionalArgs[0])
-  const filePath = isNone(filePathOption) ? '' : filePathOption.value
+  const filePath = matchOption(() => '', (value: string) => value)(filePathOption)
 
   if (!isNone(filePathOption) && (filePathOption.value === '--help' || filePathOption.value === '-h')) {
     io.stdout(`${usage}\n`)

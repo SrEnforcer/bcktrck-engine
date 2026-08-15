@@ -15,7 +15,7 @@
 /* eslint-disable max-lines */
 // DEVIATION(2.4): This module remains temporarily large during incremental migration and will be split into focused files in a follow-up slice.
 
-import { fromNullable, getOrElse, isNone, mapO, pipe } from '@tsfpp/prelude'
+import { fromNullable, getOrElseOption, isNone, mapOption, matchOption, pipe } from '@tsfpp/prelude'
 import type { IconSpec } from '../../icons/render'
 import type { ResolvedStyleMap, ResolvedTextStyles } from '../../style/dsl'
 import type { IndexedTree, PlacedTree, PlacedStaff, RenderConfig } from '../types'
@@ -129,17 +129,17 @@ const resolveNodeRenderStyleContext = (input: ResolveNodeRenderStyleContextInput
   const style = input.styleMap.get(input.nodeId)
   const fill = pipe(
     fromNullable(style?.backgroundColor),
-    mapO(escapeXml),
-    getOrElse(() => getFillColor(input.nodeKind, input.safeCfg))
+    mapOption(escapeXml),
+    getOrElseOption(() => getFillColor(input.nodeKind, input.safeCfg))
   )
   const stroke = pipe(
     fromNullable(style?.borderColor),
-    mapO(escapeXml),
-    getOrElse(() => input.safeCfg.nodeBorder)
+    mapOption(escapeXml),
+    getOrElseOption(() => input.safeCfg.nodeBorder)
   )
   const textFontSize = pipe(
     fromNullable(toTextStyle(style).fontSize),
-    getOrElse(() => input.cfg.fontSize)
+    getOrElseOption(() => input.cfg.fontSize)
   )
   return {
     style,
@@ -154,24 +154,24 @@ const resolveStaffRenderStyleContext = (input: ResolveStaffRenderStyleContextInp
   const parentId = input.staffParentLookup[input.staffNodeId]
   const style = pipe(
     fromNullable(input.styleMap.get(input.staffNodeId)),
-    getOrElse(() => {
+    getOrElseOption(() => {
       const parentIdOption = fromNullable(parentId)
-      return isNone(parentIdOption) ? undefined : input.styleMap.get(parentIdOption.value)
+      return matchOption(() => undefined, (value: string) => input.styleMap.get(value))(parentIdOption)
     })
   )
   const fill = pipe(
     fromNullable(style?.backgroundColor),
-    mapO(escapeXml),
-    getOrElse(() => input.safeCfg.employeeFill)
+    mapOption(escapeXml),
+    getOrElseOption(() => input.safeCfg.employeeFill)
   )
   const stroke = pipe(
     fromNullable(style?.borderColor),
-    mapO(escapeXml),
-    getOrElse(() => input.safeCfg.nodeBorder)
+    mapOption(escapeXml),
+    getOrElseOption(() => input.safeCfg.nodeBorder)
   )
   const textFontSize = pipe(
     fromNullable(toTextStyle(style).fontSize),
-    getOrElse(() => input.cfg.fontSize)
+    getOrElseOption(() => input.cfg.fontSize)
   )
   return {
     style,
@@ -302,7 +302,7 @@ const renderSingleStaffBodyAtPosition = (input: RenderSingleStaffBodyAtPositionI
 
   return {
     elements: [
-      `<rect id="${escapeXml(input.staffNode.id)}" class="staff" x="${input.p.x}" y="${input.p.y}" width="${w}" height="${h}" fill="${renderStyle.fill}"${renderStyle.strokeAttr}${strokeWidthAttr(pipe(fromNullable(renderStyle.style?.borderWidth), getOrElse(() => 1)))} opacity="0.7"${rectStrokeStyleAttrs(renderStyle.style)} />`,
+      `<rect id="${escapeXml(input.staffNode.id)}" class="staff" x="${input.p.x}" y="${input.p.y}" width="${w}" height="${h}" fill="${renderStyle.fill}"${renderStyle.strokeAttr}${strokeWidthAttr(pipe(fromNullable(renderStyle.style?.borderWidth), getOrElseOption(() => 1)))} opacity="0.7"${rectStrokeStyleAttrs(renderStyle.style)} />`,
       ...optionalElement(iconElement),
       labelElement
     ],

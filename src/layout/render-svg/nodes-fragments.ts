@@ -6,7 +6,7 @@
  * @packageDocumentation
  */
 
-import { flatMapO, fromNullable, getOrElse, isNone, mapO, pipe } from '@tsfpp/prelude'
+import { flatMapOption, foldMap, fromNullable, getOrElseOption, isNone, mapOption, matchOption, monoidSum, pipe } from '@tsfpp/prelude'
 import type { IconSpec } from '../../icons/render'
 import type { ResolvedNodeStyle, ResolvedTextStyles } from '../../style/dsl'
 import { countDirectSubordinates } from '../../subtree/subordinate-count-policy'
@@ -221,7 +221,7 @@ const subordinateBadgeCorner = (iconSpecs: readonly IconSpec[] | undefined): Cor
     return 'bottom-right'
   }
   const firstOption = fromNullable(iconSpecsOption.value[0])
-  return isNone(firstOption) ? 'bottom-right' : firstOption.value.pos
+  return matchOption((): Corner => 'bottom-right', (value: IconSpec) => value.pos)(firstOption)
 }
 
 const iconBlockWidthAtCorner = (
@@ -236,14 +236,14 @@ const iconBlockWidthAtCorner = (
 
   if (safeIconSpecs.length === 1) {
     const firstOption = fromNullable(safeIconSpecs[0])
-    return isNone(firstOption) ? 0 : firstOption.value.pos === corner ? firstOption.value.size : 0
+    return matchOption(() => 0, (value: IconSpec) => value.pos === corner ? value.size : 0)(firstOption)
   }
 
   if (corner !== 'bottom-right') {
     return 0
   }
 
-  const totalIconWidth = safeIconSpecs.map((spec) => spec.size).reduce((sum, width) => sum + width, 0)
+  const totalIconWidth = foldMap<typeof safeIconSpecs[number], number>(monoidSum)((spec) => spec.size)(safeIconSpecs)
   const totalGapWidth = ICON_STACK_GAP * Math.max(0, safeIconSpecs.length - 1)
   return totalIconWidth + totalGapWidth
 }
@@ -423,9 +423,9 @@ const renderTriangleElement = (input: RenderTriangleElementInput): string | unde
 
   const iconPos = pipe(
     fromNullable(input.iconSpecs),
-    flatMapO((iconSpecs) => fromNullable(iconSpecs[0])),
-    flatMapO((iconSpec) => fromNullable(iconSpec.pos)),
-    getOrElse(() => 'bottom-right')
+    flatMapOption((iconSpecs) => fromNullable(iconSpecs[0])),
+    flatMapOption((iconSpec) => fromNullable(iconSpec.pos)),
+    getOrElseOption(() => 'bottom-right')
   )
   const corner = resolveTriangleCorner(iconPos)
   const size = Math.max(12, Math.min(input.w, input.h) * 0.18)
@@ -443,8 +443,8 @@ export const renderOptionalIconElement = (params: RenderOptionalIconElementParam
   }
   const color = pipe(
     fromNullable(style?.iconColor),
-    mapO(escapeXml),
-    getOrElse(() => pipe(fromNullable(style?.borderColor), getOrElse(() => cfg.nodeBorder)))
+    mapOption(escapeXml),
+    getOrElseOption(() => pipe(fromNullable(style?.borderColor), getOrElseOption(() => cfg.nodeBorder)))
   )
 
   return renderNodeIcons({
@@ -457,12 +457,12 @@ export const renderOptionalIconElement = (params: RenderOptionalIconElementParam
 /** Wrap an optional SVG fragment into a readonly array for concatenation. */
 export const optionalElement = (value: string | undefined): readonly string[] => {
   const valueOption = fromNullable(value)
-  return isNone(valueOption) ? [] : [valueOption.value]
+  return matchOption(() => [], (v: string) => [v])(valueOption)
 }
 
 /** Build the final SVG element list for a single node body. */
 export const buildSingleNodeBodyElements = (input: BuildSingleNodeBodyElementsInput): readonly string[] => [
-  `<rect id="${escapeXml(input.nodeId)}" class="node" x="${input.p.x}" y="${input.p.y}" width="${input.w}" height="${input.h}" fill="${input.renderStyle.fill}"${input.renderStyle.strokeAttr}${strokeWidthAttr(pipe(fromNullable(input.renderStyle.style?.borderWidth), getOrElse(() => 2)))}${rectStrokeStyleAttrs(input.renderStyle.style)} />`,
+  `<rect id="${escapeXml(input.nodeId)}" class="node" x="${input.p.x}" y="${input.p.y}" width="${input.w}" height="${input.h}" fill="${input.renderStyle.fill}"${input.renderStyle.strokeAttr}${strokeWidthAttr(pipe(fromNullable(input.renderStyle.style?.borderWidth), getOrElseOption(() => 2)))}${rectStrokeStyleAttrs(input.renderStyle.style)} />`,
   ...optionalElement(input.triangleElement),
   ...optionalElement(input.iconElement),
   ...optionalElement(input.subordinateBadge),

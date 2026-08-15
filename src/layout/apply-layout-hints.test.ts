@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { fromNullable, getOrElse, intoMap, none, some } from '@tsfpp/prelude'
+import { fromNullable, getOrElseOption, intoMap, none, some } from '@tsfpp/prelude'
 import { applyLayoutHints } from './apply-layout-hints'
 import type { IndexedTree, PlacedTree } from './types'
 import { mkApplyHintTree, mkPlacedFromEntries } from '../tests/factories/layout-slice'
@@ -94,8 +94,8 @@ describe('applyLayoutHints when root has hanging-both hint with two children', (
 
     expect(a).toBeDefined()
     expect(b).toBeDefined()
-    expect(getOrElse(() => 0)(fromNullable(a?.x)) > 0).toBe(true)
-    expect(getOrElse(() => 0)(fromNullable(b?.x)) < 0).toBe(true)
+    expect(getOrElseOption(() => 0)(fromNullable(a?.x)) > 0).toBe(true)
+    expect(getOrElseOption(() => 0)(fromNullable(b?.x)) < 0).toBe(true)
   })
 })
 

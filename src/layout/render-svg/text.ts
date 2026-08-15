@@ -7,7 +7,7 @@
  */
 
 import type { ResolvedTextStyle, ResolvedTextStyles } from '../../style/dsl'
-import { fromNullable, getOrElse, isNone } from '@tsfpp/prelude'
+import { concatAll, fromNullable, getOrElseOption, isNone, matchOption, monoidSum } from '@tsfpp/prelude'
 import { escapeXml, mergeTextStyle, textAttrs } from './shared'
 
 /**
@@ -51,10 +51,10 @@ const compactTextStyle = (style: CompactableTextStyle): ResolvedTextStyle => {
   const lineSpacingOption = fromNullable(style.lineSpacing)
 
   return {
-    ...(isNone(colorOption) ? {} : { color: colorOption.value }),
-    ...(isNone(fontSizeOption) ? {} : { fontSize: fontSizeOption.value }),
-    ...(isNone(fontWeightOption) ? {} : { fontWeight: fontWeightOption.value }),
-    ...(isNone(lineSpacingOption) ? {} : { lineSpacing: lineSpacingOption.value })
+    ...matchOption(() => ({}), (value: string) => ({ color: value }))(colorOption),
+    ...matchOption(() => ({}), (value: number) => ({ fontSize: value }))(fontSizeOption),
+    ...matchOption(() => ({}), (value: string) => ({ fontWeight: value }))(fontWeightOption),
+    ...matchOption(() => ({}), (value: number) => ({ lineSpacing: value }))(lineSpacingOption)
   }
 }
 
@@ -80,7 +80,7 @@ const capTextStyleFontSize = (style: ResolvedTextStyle, maxFontSize: number): Re
     const fontSizeOption = fromNullable(style.fontSize)
     return compactTextStyle({
       ...style,
-      fontSize: isNone(fontSizeOption) ? maxFontSize : Math.min(fontSizeOption.value, maxFontSize)
+      fontSize: matchOption(() => maxFontSize, (value: number) => Math.min(value, maxFontSize))(fontSizeOption)
     })
   }
 
@@ -163,7 +163,7 @@ const wrapLabel = (label: string, maxCharsPerLine: number, lineLimit = 3): reado
   const clipped = wrapped.slice(0, lineLimit)
   const remainder = wrapped.slice(lineLimit).join(' ')
   const clippedLast = clipped[lineLimit - 1]
-  const last = getOrElse<string>(() => '')(fromNullable(clippedLast))
+  const last = getOrElseOption<string>(() => '')(fromNullable(clippedLast))
   const room = Math.max(3, maxCharsPerLine - 3)
   const suffix = remainder.length > room ? `${remainder.slice(0, room)}...` : `${remainder}...`
   return clipped.map((line, index) =>
@@ -186,7 +186,7 @@ const splitLabelParts = (label: string): { readonly name: string; readonly title
   const [name = '', ...titleSegments] = segments
   const title = titleSegments.length > 0 ? titleSegments.join(' ') : undefined
   const titleOption = fromNullable(title)
-  return { name, ...(isNone(titleOption) ? {} : { title: titleOption.value }) }
+  return { name, ...matchOption(() => ({}), (value: string) => ({ title: value }))(titleOption) }
 }
 
 /** Builds style-tagged text lines for name/title rendering in node labels. */
@@ -222,9 +222,9 @@ export const composeShadowLabel = (
 ): string => {
   const { name, title } = splitLabelParts(primaryLabel)
   const primaryName = name.length > 0 ? name : primaryLabel
-  const effectiveTitle = getOrElse<string | undefined>(() => title)(fromNullable(shadowLabelOverride))
+  const effectiveTitle = getOrElseOption<string | undefined>(() => title)(fromNullable(shadowLabelOverride))
   const effectiveTitleOption = fromNullable(effectiveTitle)
-  return isNone(effectiveTitleOption) ? primaryName : `${primaryName}\n${effectiveTitleOption.value}`
+  return matchOption(() => primaryName, (value: string) => `${primaryName}\n${value}`)(effectiveTitleOption)
 }
 
 /** Fits text size into the label rectangle using width/height budgets. */
@@ -253,7 +253,7 @@ export const renderStyledLabelElement = (
 ): string => {
   if (input.styledLines.length === 1) {
     const singleLine = input.styledLines[0]
-    const firstLine: StyledLabelLine = getOrElse<StyledLabelLine>(() => ({ text: input.fallbackText, kind: 'name' }))(fromNullable(singleLine))
+    const firstLine: StyledLabelLine = getOrElseOption<StyledLabelLine>(() => ({ text: input.fallbackText, kind: 'name' }))(fromNullable(singleLine))
     const lineStyle = firstLine.kind === 'title'
       ? mergeTextStyle(input.textStyles.nodeTitle, input.baseTextStyle)
       : mergeTextStyle(input.textStyles.nodeName, input.baseTextStyle)
@@ -271,14 +271,14 @@ export const renderStyledLabelElement = (
     }
   })
   const gaps = linesWithStyle.slice(1).map((entry) => {
-    const lineSpacing = getOrElse<number>(() => 1.18)(fromNullable(entry.style.lineSpacing))
+    const lineSpacing = getOrElseOption<number>(() => 1.18)(fromNullable(entry.style.lineSpacing))
     return input.fittedFont * lineSpacing
   })
-  const totalHeight = gaps.reduce((sum, gap) => sum + gap, 0)
+  const totalHeight = concatAll(monoidSum)(gaps)
   const firstY = input.ty - totalHeight / 2
   const tspans = linesWithStyle
     .map((entry, index) => {
-      const y = firstY + gaps.slice(0, index).reduce((sum, gap) => sum + gap, 0)
+      const y = firstY + concatAll(monoidSum)(gaps.slice(0, index))
       const attrs = textAttrs(entry.style)
       return `<tspan x="${input.tx}" y="${y}" ${attrs}>${escapeXml(entry.line.text)}</tspan>`
     })

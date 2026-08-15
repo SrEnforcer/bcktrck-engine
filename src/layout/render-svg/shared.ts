@@ -7,7 +7,7 @@
  */
 
 import type { EdgeStyleValue, IndexedTree, LayoutNodeKind, PlacedTree, PlacedStaff, RenderConfig, RenderResult } from '../types'
-import { flatMapO, fromNullable, getOrElse, isSome, mapO, pipe } from '@tsfpp/prelude'
+import { findO, flatMapOption, fromNullable, getOrElseOption, isSome, mapOption, pipe } from '@tsfpp/prelude'
 import { renderIcon, renderIconSpec } from '../../icons/render'
 import type { IconSpec } from '../../icons/render'
 import type { ResolvedNodeStyle, ResolvedTextStyle } from '../../style/dsl'
@@ -187,7 +187,7 @@ export const getNodeBounds = (
     return { cx: p.x + w / 2, cy: p.y + h / 2, w, h }
   }
 
-  const staffNodeOption = fromNullable(input.staff.staff.find((s) => s.id === input.id))
+  const staffNodeOption = findO((s: typeof input.staff.staff[number]) => s.id === input.id)(input.staff.staff)
   if (isSome(staffNodeOption)) {
     const staffNode = staffNodeOption.value
     const w = input.cfg.staffSize * input.cfg.colWidth
@@ -198,9 +198,9 @@ export const getNodeBounds = (
 
   const shadowBoundsOption = pipe(
     fromNullable(input.shadowBoundsMap),
-    flatMapO((shadowBoundsMap) => fromNullable(shadowBoundsMap.get(input.id)))
+    flatMapOption((shadowBoundsMap) => fromNullable(shadowBoundsMap.get(input.id)))
   )
-  return isSome(shadowBoundsOption) ? shadowBoundsOption.value : undefined
+  return getOrElseOption<NodeBounds | undefined>(() => undefined)(shadowBoundsOption)
 }
 
 /** Looks up a center position from placed nodes or staff array. */
@@ -214,7 +214,7 @@ export const getNodePosition = (
     return { cx: p.x + (input.cfg.nodeSize * input.cfg.colWidth) / 2, cy: p.y + (input.cfg.nodeSize * input.cfg.rowHeight) / 2 }
   }
 
-  const staffNodeOption = fromNullable(input.staff.staff.find((s) => s.id === input.id))
+  const staffNodeOption = findO((s: typeof input.staff.staff[number]) => s.id === input.id)(input.staff.staff)
   if (isSome(staffNodeOption)) {
     const staffNode = staffNodeOption.value
     const p = { x: staffNode.x * input.cfg.colWidth, y: staffNode.y * input.cfg.rowHeight }
@@ -245,9 +245,9 @@ export const mergeTextStyle = (base: ResolvedTextStyle, override: ResolvedTextSt
 /** Build textAttrs output for rendering pipeline use. */
 export const textAttrs = (style: ResolvedTextStyle): string => {
   const attrs = [
-    pipe(fromNullable(style.color), mapO((color) => `fill="${escapeXml(color)}"`)),
-    pipe(fromNullable(style.fontSize), mapO((fontSize) => `font-size="${Math.round(fontSize)}px"`)),
-    pipe(fromNullable(style.fontWeight), mapO((fontWeight) => `font-weight="${escapeXml(fontWeight)}"`))
+    pipe(fromNullable(style.color), mapOption((color) => `fill="${escapeXml(color)}"`)),
+    pipe(fromNullable(style.fontSize), mapOption((fontSize) => `font-size="${Math.round(fontSize)}px"`)),
+    pipe(fromNullable(style.fontWeight), mapOption((fontWeight) => `font-weight="${escapeXml(fontWeight)}"`))
   ]
 
   return attrs
@@ -326,7 +326,7 @@ export const renderNodeIcons = (
         y,
         size,
         color,
-        opacity: pipe(fromNullable(spec.opacity), getOrElse(() => 0.3))
+        opacity: pipe(fromNullable(spec.opacity), getOrElseOption(() => 0.3))
       })
     })
     .join('')

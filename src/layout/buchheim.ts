@@ -43,7 +43,7 @@
 /* eslint-disable functional/prefer-readonly-type */
 
 import type { IndexedTree, LayoutPoint, PlacedTree } from './types'
-import { fromNullable, getOrElse, isNone } from '@tsfpp/prelude'
+import { fromNullable, getOrElseOption, isNone, matchOption } from '@tsfpp/prelude'
 import type { ApportionInput, ApportionState, FirstWalkInput, SecondWalkInput } from './buchheim-types'
 import {
   advanceApportionState,
@@ -69,17 +69,17 @@ const apportion = (
   const wOption = fromNullable(w)
   if (!isNone(wOption)) {
     const parentIdOption = input.nodes.get(input.v)!.parentId
-    const firstParentChild = isNone(parentIdOption) ? null : firstChildId(parentIdOption.value, input.nodes)
-    const somNodeId = getOrElse<string>(() => input.v)(fromNullable(firstParentChild))
+    const firstParentChild = matchOption(() => null, (value: string) => firstChildId(value, input.nodes))(parentIdOption)
+    const somNodeId = getOrElseOption<string>(() => input.v)(fromNullable(firstParentChild))
     const initialState: ApportionState = {
       vip: input.v,
       vop: input.v,
       vim: wOption.value,
-      vom: isNone(parentIdOption) ? input.v : firstChildId(parentIdOption.value, input.nodes),
+      vom: matchOption(() => input.v, (value: string) => firstChildId(value, input.nodes))(parentIdOption),
       sip: input.scratch.get(input.v)!.mod,
       sop: input.scratch.get(input.v)!.mod,
       sim: input.scratch.get(wOption.value)!.mod,
-      som: isNone(parentIdOption) ? input.scratch.get(input.v)!.mod : input.scratch.get(somNodeId)!.mod,
+      som: matchOption(() => input.scratch.get(input.v)!.mod, () => input.scratch.get(somNodeId)!.mod)(parentIdOption),
       rightNext: rightmost({ id: wOption.value, depth: 1, nodes: input.nodes, scratch: input.scratch }),
       leftNext: leftmost({ id: input.v, depth: 1, nodes: input.nodes, scratch: input.scratch })
     }
@@ -100,7 +100,7 @@ const apportion = (
     if (!isNone(fromNullable(finalState.rightNext)) && (
       !isNone(fromNullable(finalState.vop)) && !isNone(fromNullable(rightmost({ id: finalState.vop, depth: 1, nodes: input.nodes, scratch: input.scratch })))
     ) === false) {
-      const target = getOrElse<string>(() => input.v)(fromNullable(finalState.vop))
+      const target = getOrElseOption<string>(() => input.v)(fromNullable(finalState.vop))
       const scratchTarget = mutableScratchOf(input.scratch, target)
       const scratchTargetOption = fromNullable(scratchTarget)
       if (!isNone(scratchTargetOption)) {
@@ -112,7 +112,7 @@ const apportion = (
     if (!isNone(fromNullable(finalState.leftNext)) && (
       !isNone(fromNullable(finalState.vom)) && !isNone(fromNullable(leftmost({ id: finalState.vom, depth: 1, nodes: input.nodes, scratch: input.scratch })))
     ) === false) {
-      const target = getOrElse<string>(() => input.v)(fromNullable(finalState.vom))
+      const target = getOrElseOption<string>(() => input.v)(fromNullable(finalState.vom))
       const scratchTarget = mutableScratchOf(input.scratch, target)
       const scratchTargetOption = fromNullable(scratchTarget)
       if (!isNone(scratchTargetOption)) {
@@ -143,7 +143,7 @@ const firstWalk = (
   if (children.length === 0) {
     const leftSib = leftSibling(input.v, input.nodes)
     const leftSibOption = fromNullable(leftSib)
-    s.prelim = isNone(leftSibOption) ? 0 : input.scratch.get(leftSibOption.value)!.prelim + 1
+    s.prelim = matchOption(() => 0, (value: string) => input.scratch.get(value)!.prelim + 1)(leftSibOption)
     return
   }
 

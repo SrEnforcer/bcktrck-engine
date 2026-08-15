@@ -6,7 +6,7 @@
  * @packageDocumentation
  */
 
-import { assoc, entriesOfMap, fromNullable, getOrElse, intoMap, isNone } from '@tsfpp/prelude'
+import { assoc, entriesOf, fromNullable, getOrElseOption, intoMap, isNone, matchOption } from '@tsfpp/prelude'
 import { isKnownIcon } from '../icons/registry'
 import type { AstNodeKind } from '../types/ast'
 import type { ParseErr } from '../types/results'
@@ -129,7 +129,7 @@ export const parseVariableDeclaration = (input: ParseVariableDeclarationInput): 
     value: {
       variableName: variableNameOption.value,
       variableValue: variableValueOption.value,
-      ...(isNone(variableIconOption) ? {} : { variableIcon: variableIconOption.value })
+      ...matchOption(() => ({}), (value: string) => ({ variableIcon: value }))(variableIconOption)
     }
   }
 }
@@ -152,7 +152,7 @@ export const applyVariableDeclaration = (
         ...definitions.variableIcons.filter((entry) => entry.variable !== declaration.variableName),
         {
           variable: declaration.variableName,
-          icon: getOrElse<string>(() => '')(fromNullable(declaration.variableIcon)),
+          icon: getOrElseOption<string>(() => '')(fromNullable(declaration.variableIcon)),
           normalizedValue: declaration.variableValue.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-')
         }
       ]
@@ -170,7 +170,7 @@ const mergeDefinitions = (
   )
 
   return {
-    variables: intoMap([...entriesOfMap(base.variables), ...entriesOfMap(override.variables)]),
+    variables: intoMap([...entriesOf(base.variables), ...entriesOf(override.variables)]),
     variableIcons
   }
 }

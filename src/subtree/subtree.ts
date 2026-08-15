@@ -18,7 +18,7 @@
  */
 
 import type { Option } from '@tsfpp/prelude'
-import { entriesOfMap, fromNullable, getOrElse, intoMap, isNone, none, some } from '@tsfpp/prelude'
+import { entriesOf, fromNullable, getOrElseOption, intoMap, isNone, matchOption, none, orElseOption, some } from '@tsfpp/prelude'
 import { asNodeId } from '../types/branded'
 import type { OrgNode, OrgTree } from '../types/org-tree'
 import { buildUpstreamPathRoot, collectNodeIds, findNodeById, upwardPathIds } from './subtree-helpers'
@@ -66,8 +66,8 @@ const composeShadowLabel = (primaryLabel: string, shadowLabelOverride: string | 
   const title = rest.length > 0 ? rest.join(' ') : undefined
   const overrideOption = fromNullable(shadowLabelOverride)
   const fallbackOption = fromNullable(title)
-  const effectiveTitleOption = isNone(overrideOption) ? fallbackOption : overrideOption
-  return isNone(effectiveTitleOption) ? name : `${name}\n${effectiveTitleOption.value}`
+  const effectiveTitleOption = orElseOption(() => fallbackOption)(overrideOption)
+  return matchOption(() => name, (value: string) => `${name}\n${value}`)(effectiveTitleOption)
 }
 
 const childrenOf = (node: OrgNode): readonly OrgNode[] =>
@@ -87,7 +87,7 @@ const collectParentMap = (
 
   return childrenOf(node).reduce<ReadonlyMap<string, string>>((acc, child) => {
     const childMap = collectParentMap(child, ownId)
-    return intoMap([...entriesOfMap(acc), ...entriesOfMap(childMap)])
+    return intoMap([...entriesOf(acc), ...entriesOf(childMap)])
   }, withCurrent)
 }
 
@@ -119,7 +119,7 @@ const sharedDirectParentId = (
     return undefined
   }
 
-  const normalizedIds = directParentIds.map((parentIdOption) => getOrElse<string>(() => '')(parentIdOption))
+  const normalizedIds = directParentIds.map((parentIdOption) => getOrElseOption<string>(() => '')(parentIdOption))
   const firstOption = fromNullable(normalizedIds[0])
   if (isNone(firstOption)) {
     return undefined
@@ -252,7 +252,7 @@ const buildForestRoot = (tree: OrgTree, selectedRoots: readonly OrgNode[]): OrgN
   })
 
   if (selectedRoots.length === 1) {
-    return getOrElse<OrgNode>(() => syntheticRoot())(fromNullable(selectedRoots[0]))
+    return getOrElseOption<OrgNode>(() => syntheticRoot())(fromNullable(selectedRoots[0]))
   }
 
   if (tree.root.kind === 'department') {
@@ -419,7 +419,7 @@ export const isolateSubtrees = (tree: OrgTree, ids: readonly string[]): Option<O
 
   const rootNode = isNone(sharedParentIdOption)
     ? buildForestRoot(tree, selectedRoots)
-    : getOrElse<OrgNode>(() => buildForestRoot(tree, selectedRoots))(sharedParentOption)
+    : getOrElseOption<OrgNode>(() => buildForestRoot(tree, selectedRoots))(sharedParentOption)
 
   const adjustedRootNode = isNone(sharedParentOption)
     ? rootNode

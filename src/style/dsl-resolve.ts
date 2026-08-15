@@ -6,11 +6,11 @@
  * @packageDocumentation
  */
 
-import { assoc, entriesOfMap, fromNullable, getOrElse, intoMap, intoSet, isNone, unique } from '@tsfpp/prelude'
-import type { EdgeStyleValue, IndexedTree } from '../layout/types'
+import { assoc, entriesOf, findO, flatMapOption, fromNullable, getOrElseOption, intoMap, intoSet, isNone, matchOption, unique } from '@tsfpp/prelude'
+import type { EdgeStyleValue, IndexedNode, IndexedTree } from '../layout/types'
 import { buildHandleMap } from '../resolver/handles'
 import { collectNodes } from '../resolver/tree'
-import type { AstAttrValue, AstNodeKind, AstOrg } from '../types/ast'
+import type { AstAttr, AstAttrValue, AstNodeKind, AstOrg } from '../types/ast'
 import type { ResolveError } from '../types/results'
 import type { IconPos } from '../icons/render'
 import { isKnownIcon, ICON_POSITIONS } from '../icons/registry'
@@ -128,7 +128,7 @@ const normalizeRole = (value: string): string => value.trim().toLowerCase().repl
 
 const trimmedLookupOr = (variables: ReadonlyMap<string, string>, key: string, fallback: string): string => {
   const valueOption = fromNullable(variables.get(key))
-  return isNone(valueOption) ? fallback : valueOption.value.trim()
+  return matchOption(() => fallback, (value: string) => value.trim())(valueOption)
 }
 
 const resolveRoleAlias = (role: string, variables: ReadonlyMap<string, string>): string => {
@@ -169,7 +169,7 @@ const appendRoleHandle = (
   role: string,
   handle: string
 ): ReadonlyMap<string, readonly string[]> => {
-  const existing = getOrElse<readonly string[]>(() => [])(fromNullable(roleToHandles.get(role)))
+  const existing = getOrElseOption<readonly string[]>(() => [])(fromNullable(roleToHandles.get(role)))
   return assoc(role, appendReadonly(existing, handle))(roleToHandles)
 }
 
@@ -196,7 +196,7 @@ const buildKindHandleMap = (
   handleMap: ReadonlyMap<string, { readonly node: AstOrg['root']; readonly handle: string }>
 ): ReadonlyMap<AstNodeKind, readonly string[]> =>
   [...handleMap.entries()].reduce<ReadonlyMap<AstNodeKind, readonly string[]>>((acc, [handle, mapEntry]) => {
-    const existing = getOrElse<readonly string[]>(() => [])(fromNullable(acc.get(mapEntry.node.kind)))
+    const existing = getOrElseOption<readonly string[]>(() => [])(fromNullable(acc.get(mapEntry.node.kind)))
     return assoc(mapEntry.node.kind, appendReadonly(existing, handle))(acc)
   }, intoMap<AstNodeKind, readonly string[]>([]))
 
@@ -224,7 +224,7 @@ const uniqueTargets = (targets: readonly string[]): readonly string[] => unique(
 
 const childHandlesOrEmpty = (indexed: IndexedTree, handle: string): readonly string[] => {
   const nodeOption = fromNullable(indexed.nodes.get(handle))
-  return isNone(nodeOption) ? [] : nodeOption.value.children
+  return matchOption(() => [], (value: IndexedNode) => value.children)(nodeOption)
 }
 
 const resolveHandleTargets = (
@@ -256,7 +256,7 @@ const resolveRoleChildrenTargets = (
   roleToHandles: ReadonlyMap<string, readonly string[]>
 ): RuleTargetResolution => ({
   targets: uniqueTargets(
-    getOrElse<readonly string[]>(() => [])(fromNullable(roleToHandles.get(selector.role))).flatMap((handle) => childHandlesOrEmpty(indexed, handle))
+    getOrElseOption<readonly string[]>(() => [])(fromNullable(roleToHandles.get(selector.role))).flatMap((handle) => childHandlesOrEmpty(indexed, handle))
   )
 })
 
@@ -264,8 +264,7 @@ const matchesTypeSelector = (
   mapEntry: { readonly node: AstOrg['root']; readonly handle: string },
   targetType: string
 ): boolean => {
-  const typeAttr = mapEntry.node.attrs.find((attr) => attr.key === 'type')
-  const typeAttrOption = fromNullable(typeAttr)
+  const typeAttrOption = findO((attr: AstAttr) => attr.key === 'type')(mapEntry.node.attrs)
   return !isNone(typeAttrOption)
     && 'value' in typeAttrOption.value
     && typeAttrOption.value.value.kind === 'string'
@@ -292,7 +291,7 @@ const resolveNodeKindChildrenTargets = (
   indexed: IndexedTree,
   kindToHandles: ReadonlyMap<AstNodeKind, readonly string[]>
 ): RuleTargetResolution => ({
-  targets: uniqueTargets(getOrElse<readonly string[]>(() => [])(fromNullable(kindToHandles.get(selector.nodeKind))).flatMap((handle) => childHandlesOrEmpty(indexed, handle)))
+  targets: uniqueTargets(getOrElseOption<readonly string[]>(() => [])(fromNullable(kindToHandles.get(selector.nodeKind))).flatMap((handle) => childHandlesOrEmpty(indexed, handle)))
 })
 
 const resolveRuleTargets = (
@@ -313,7 +312,7 @@ const resolveRuleTargets = (
     case 'children':
       return resolveChildrenTargets(selector, input.indexed, input.handleMap)
     case 'role':
-      return { targets: getOrElse<readonly string[]>(() => [])(fromNullable(input.roleToHandles.get(selector.role))) }
+      return { targets: getOrElseOption<readonly string[]>(() => [])(fromNullable(input.roleToHandles.get(selector.role))) }
     case 'role-children':
       return resolveRoleChildrenTargets(selector, input.indexed, input.roleToHandles)
     case 'type':
@@ -321,7 +320,7 @@ const resolveRuleTargets = (
     case 'type-children':
       return resolveTypeChildrenTargets(selector, input.indexed, input.handleMap)
     case 'node-kind':
-      return { targets: getOrElse<readonly string[]>(() => [])(fromNullable(input.kindToHandles.get(selector.nodeKind))) }
+      return { targets: getOrElseOption<readonly string[]>(() => [])(fromNullable(input.kindToHandles.get(selector.nodeKind))) }
     case 'node-kind-children':
       return resolveNodeKindChildrenTargets(selector, input.indexed, input.kindToHandles)
     case 'node-name':
@@ -350,12 +349,12 @@ type NodeStyleApplier = (
 
 const parsePxOrUnitlessNumber = (value: string): number | undefined => {
   const match = value.match(/^(\d+(?:\.\d+)?)(?:px)?$/)
-  const matchOption = fromNullable(match)
-  if (isNone(matchOption)) {
+  const matchArrayOption = fromNullable(match)
+  if (isNone(matchArrayOption)) {
     return undefined
   }
-  const groupOption = fromNullable(matchOption.value[1])
-  return isNone(groupOption) ? undefined : Number(groupOption.value)
+  const groupOption = fromNullable(matchArrayOption.value[1])
+  return matchOption(() => undefined, (value: string) => Number(value))(groupOption)
 }
 
 const MAX_ICON_STACK = 5
@@ -365,7 +364,7 @@ const applyFontSize: NodeStyleApplier = (current, resolvedValue, declaration) =>
   if (isNone(fromNullable(size))) {
     return resolveError(declaration.line, declaration.col, `Invalid font-size value: ${resolvedValue}`)
   }
-  return { ...current, fontSize: getOrElse<number>(() => 0)(fromNullable(size)) }
+  return { ...current, fontSize: getOrElseOption<number>(() => 0)(fromNullable(size)) }
 }
 
 const applyFontWeight: NodeStyleApplier = (current, resolvedValue, declaration) => {
@@ -427,8 +426,7 @@ const applyIcon: NodeStyleApplier = (current, resolvedValue, declaration) => {
   if (names.length > MAX_ICON_STACK) {
     return resolveError(declaration.line, declaration.col, `icon: maximum ${MAX_ICON_STACK} icons allowed, got ${names.length}`)
   }
-  const unknownName = names.find((name) => !isKnownIcon(name))
-  const unknownNameOption = fromNullable(unknownName)
+  const unknownNameOption = findO((name: string) => !isKnownIcon(name))(names)
   return !isNone(unknownNameOption)
     ? resolveError(declaration.line, declaration.col, `Unknown icon: ${unknownNameOption.value}`)
     : { ...current, icon: names }
@@ -455,7 +453,7 @@ const applyIconSize: NodeStyleApplier = (current, resolvedValue, declaration) =>
 const applyIconOpacity: NodeStyleApplier = (current, resolvedValue, declaration) => {
   const opacityMatch = resolvedValue.match(/^(\d+(?:\.\d+)?)(?:%)?$/)
   const opacityMatchOption = fromNullable(opacityMatch)
-  const opacityGroupOption = isNone(opacityMatchOption) ? fromNullable<string>(undefined) : fromNullable(opacityMatchOption.value[1])
+  const opacityGroupOption = flatMapOption((m: RegExpMatchArray) => fromNullable(m[1]))(opacityMatchOption)
   if (isNone(opacityGroupOption)) {
     return resolveError(declaration.line, declaration.col, `Invalid icon-opacity value: ${resolvedValue}`)
   }
@@ -517,10 +515,10 @@ const applyTextDeclaration = (
   const fontWeightOption = fromNullable(applied.fontWeight)
   const lineSpacingOption = fromNullable(applied.lineSpacing)
   return {
-    ...(isNone(colorOption) ? {} : { color: colorOption.value }),
-    ...(isNone(fontSizeOption) ? {} : { fontSize: fontSizeOption.value }),
-    ...(isNone(fontWeightOption) ? {} : { fontWeight: fontWeightOption.value }),
-    ...(isNone(lineSpacingOption) ? {} : { lineSpacing: lineSpacingOption.value })
+    ...matchOption(() => ({}), (value: string) => ({ color: value }))(colorOption),
+    ...matchOption(() => ({}), (value: number) => ({ fontSize: value }))(fontSizeOption),
+    ...matchOption(() => ({}), (value: string) => ({ fontWeight: value }))(fontWeightOption),
+    ...matchOption(() => ({}), (value: number) => ({ lineSpacing: value }))(lineSpacingOption)
   }
 }
 
@@ -574,7 +572,7 @@ const applyNodeRuleTargets = (input: {
   readonly variables: ReadonlyMap<string, string>
 }): { readonly styles: ReadonlyMap<string, ResolvedNodeStyle>; readonly errors: readonly ResolveError[] } =>
   input.targets.reduce<{ readonly styles: ReadonlyMap<string, ResolvedNodeStyle>; readonly errors: readonly ResolveError[] }>((styleAcc, target) => {
-    const currentStyle = getOrElse<ResolvedNodeStyle>(() => ({}))(fromNullable(styleAcc.styles.get(target)))
+    const currentStyle = getOrElseOption<ResolvedNodeStyle>(() => ({}))(fromNullable(styleAcc.styles.get(target)))
     const applied = applyDeclarations({ initialStyle: currentStyle, declarations: input.declarations, variables: input.variables, apply: applyDeclaration })
     return {
       styles: assoc(target, applied.style)(styleAcc.styles),
@@ -658,8 +656,8 @@ const deriveVariableIcons = (
 
     return derived.length === 0
       ? acc
-      : intoMap([...entriesOfMap(acc), [handle, { ...getOrElse<ResolvedNodeStyle>(() => ({}))(fromNullable(current)), icon: [...derived] }] as const])
-  }, intoMap(entriesOfMap(styles)))
+      : intoMap([...entriesOf(acc), [handle, { ...getOrElseOption<ResolvedNodeStyle>(() => ({}))(fromNullable(current)), icon: [...derived] }] as const])
+  }, intoMap(entriesOf(styles)))
 
 /**
  * Resolve parsed style rules against the semantic org tree.

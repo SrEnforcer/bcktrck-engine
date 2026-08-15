@@ -22,8 +22,8 @@
 // DEVIATION(2.4): Resolver remains centralized during staged extraction of icon, shadow, and edge adapters.
 
 import { asDeptId, asNodeId } from '../types/branded'
-import { fromNullable, getOrElse, intoMap, isNone } from '@tsfpp/prelude'
-import type { AstNode, AstOrg } from '../types/ast'
+import { findO, fromNullable, getOrElseOption, intoMap, isNone, matchOption } from '@tsfpp/prelude'
+import type { AstNode, AstOrg, AstVisualDirective } from '../types/ast'
 import type { DottedEdge, OrgNode, OrgTree } from '../types/org-tree'
 import type { ResolveResult } from '../types/results'
 import { ICON_POSITIONS, DEFAULT_ICON_POS, DEFAULT_ICON_SIZE, isKnownIcon } from '../icons/registry'
@@ -115,7 +115,7 @@ const extractHangingSide = (node: AstNode): 'left' | 'right' | undefined => {
  * Resolve node to its assigned handle, defaulting to 'node' if not found.
  */
 const getNodeIdForAstNode = (astNode: AstNode, nodeToHandle: ReadonlyMap<AstNode, string>): string =>
-  getOrElse<string>(() => 'node')(fromNullable(nodeToHandle.get(astNode)))
+  getOrElseOption<string>(() => 'node')(fromNullable(nodeToHandle.get(astNode)))
 
 const firstLayoutHint = (node: AstNode): AstNode['layoutHints'][number]['kind'] | undefined =>
   node.layoutHints[0]?.kind
@@ -129,9 +129,9 @@ const toHrTitle = (node: AstNode, variables: ResolverVariables): string => {
   const title = findResolvedStringAttrValue('title', node.attrs, variables)?.trim()
 
   const titleOption = fromNullable(title)
-  if (isNone(titleOption)) return getOrElse<string>(() => '')(fromNullable(displayName))
-  return !isNone(fromNullable(displayName)) && getOrElse<string>(() => '')(fromNullable(displayName)).length > 0
-    ? `${getOrElse<string>(() => '')(fromNullable(displayName))}\n${titleOption.value}`
+  if (isNone(titleOption)) return getOrElseOption<string>(() => '')(fromNullable(displayName))
+  return !isNone(fromNullable(displayName)) && getOrElseOption<string>(() => '')(fromNullable(displayName)).length > 0
+    ? `${getOrElseOption<string>(() => '')(fromNullable(displayName))}\n${titleOption.value}`
     : titleOption.value
 }
 
@@ -147,7 +147,7 @@ const extractShadowPrimaryHandle = (node: AstNode, variables: ResolverVariables)
  * Extract shadow node label from [label: ...] attribute, falling back to display name.
  */
 const extractShadowLabel = (node: AstNode, variables: ResolverVariables): string | undefined =>
-  getOrElse<string | undefined>(() => node.displayName)(fromNullable(findResolvedStringAttrValue('label', node.attrs, variables)))
+  getOrElseOption<string | undefined>(() => node.displayName)(fromNullable(findResolvedStringAttrValue('label', node.attrs, variables)))
 
 const extractShadowType = (node: AstNode): 'employee' | 'staff' => {
   const value = findStringAttrValue('type', node.attrs)?.trim().toLowerCase()
@@ -191,7 +191,7 @@ const extractIconAttrs = (
   const titleIcon = !isNone(titleAttrRawOption) && titleAttrRawOption.value.startsWith('$')
     ? variableIconMap.get(titleAttrRawOption.value.slice(1))
     : undefined
-  const iconName = getOrElse<string | undefined>(() => titleIcon)(fromNullable(explicitIcon))
+  const iconName = getOrElseOption<string | undefined>(() => titleIcon)(fromNullable(explicitIcon))
   const iconNameOption = fromNullable(iconName)
 
   if (isNone(iconNameOption) || !isKnownIcon(iconNameOption.value)) return {}
@@ -217,7 +217,7 @@ const extractIconAttrs = (
     icon: iconNameOption.value,
     iconPos,
     iconSize,
-    ...(isNone(iconOpacityOption) ? {} : { iconOpacity: iconOpacityOption.value })
+    ...matchOption(() => ({}), (value: number) => ({ iconOpacity: value }))(iconOpacityOption)
   }
 }
 /* eslint-enable complexity */
@@ -230,8 +230,7 @@ const extractIconAttrs = (
 
 // Helper: extract optional triangle effect from the !new visual hint.
 const extractTriangleEffect = (node: AstNode): { readonly color: string } | undefined => {
-  const hint = node.visualHints?.find(h => h.name === 'new')
-  const hintOption = fromNullable(hint)
+  const hintOption = findO((h: AstVisualDirective) => h.name === 'new')(node.visualHints)
   if (isNone(hintOption)) return undefined
   const rawColor = hintOption.value.params?.[0]
   const rawColorOption = fromNullable(rawColor)
@@ -267,11 +266,11 @@ const toOrgNode = (input: ToOrgNodeInput): OrgNode => {
 
   if (kind === 'department') {
     const headHandle = extractDeptHeadHandle(input.node, input.variables)
-    const fallbackHeadAst = input.node.children.find((child) => child.kind !== 'dept')
-    const fallbackHeadAstOption = fromNullable(fallbackHeadAst)
-    const fallbackHeadId = !isNone(fallbackHeadAstOption)
-      ? asNodeId(getNodeIdForAstNode(fallbackHeadAstOption.value, input.nodeToHandle))
-      : asNodeId(`missing-head-${idValue}`)
+    const fallbackHeadAstOption = findO((child: AstNode) => child.kind !== 'dept')(input.node.children)
+    const fallbackHeadId = matchOption(
+      () => asNodeId(`missing-head-${idValue}`),
+      (child: AstNode) => asNodeId(getNodeIdForAstNode(child, input.nodeToHandle))
+    )(fallbackHeadAstOption)
     const layoutHintOption = fromNullable(layoutHint)
     const hangingSideOption = fromNullable(hangingSide)
     const triangleEffectOption = fromNullable(triangleEffect)
@@ -280,11 +279,11 @@ const toOrgNode = (input: ToOrgNodeInput): OrgNode => {
     return {
       kind: 'department',
       id: asDeptId(idValue),
-      name: getOrElse<string>(() => idValue)(fromNullable(input.node.displayName)),
-      ...(isNone(layoutHintOption) ? {} : { layoutHint: layoutHintOption.value }),
-      ...(isNone(hangingSideOption) ? {} : { hangingSide: hangingSideOption.value }),
-      ...(isNone(triangleEffectOption) ? {} : { triangleEffect: triangleEffectOption.value }),
-      head: isNone(headHandleOption) ? fallbackHeadId : asNodeId(headHandleOption.value),
+      name: getOrElseOption<string>(() => idValue)(fromNullable(input.node.displayName)),
+      ...matchOption(() => ({}), (value: AstNode['layoutHints'][number]['kind']) => ({ layoutHint: value }))(layoutHintOption),
+      ...matchOption(() => ({}), (value: 'left' | 'right') => ({ hangingSide: value }))(hangingSideOption),
+      ...matchOption(() => ({}), (value: { readonly color: string }) => ({ triangleEffect: value }))(triangleEffectOption),
+      head: matchOption(() => fallbackHeadId, (value: string) => asNodeId(value))(headHandleOption),
       members: children
     }
   }
@@ -301,9 +300,9 @@ const toOrgNode = (input: ToOrgNodeInput): OrgNode => {
         title: toHrTitle(input.node, input.variables),
         ...vacancyIconAttrs
       },
-      ...(isNone(triangleEffectOption) ? {} : { triangleEffect: triangleEffectOption.value }),
-      ...(isNone(layoutHintOption) ? {} : { layoutHint: layoutHintOption.value }),
-      ...(isNone(hangingSideOption) ? {} : { hangingSide: hangingSideOption.value }),
+      ...matchOption(() => ({}), (value: { readonly color: string }) => ({ triangleEffect: value }))(triangleEffectOption),
+      ...matchOption(() => ({}), (value: AstNode['layoutHints'][number]['kind']) => ({ layoutHint: value }))(layoutHintOption),
+      ...matchOption(() => ({}), (value: 'left' | 'right') => ({ hangingSide: value }))(hangingSideOption),
       children
     }
   }
@@ -319,9 +318,9 @@ const toOrgNode = (input: ToOrgNodeInput): OrgNode => {
       title: toHrTitle(input.node, input.variables),
       ...empIconAttrs
     },
-    ...(isNone(triangleEffectOption) ? {} : { triangleEffect: triangleEffectOption.value }),
-    ...(isNone(layoutHintOption) ? {} : { layoutHint: layoutHintOption.value }),
-    ...(isNone(hangingSideOption) ? {} : { hangingSide: hangingSideOption.value }),
+    ...matchOption(() => ({}), (value: { readonly color: string }) => ({ triangleEffect: value }))(triangleEffectOption),
+    ...matchOption(() => ({}), (value: AstNode['layoutHints'][number]['kind']) => ({ layoutHint: value }))(layoutHintOption),
+    ...matchOption(() => ({}), (value: 'left' | 'right') => ({ hangingSide: value }))(hangingSideOption),
     children,
     staff
   }
@@ -343,19 +342,19 @@ type ShadowNodeOptionalsInput = {
 
 const optionalShadowLabel = (label: string | undefined): { readonly label?: string } => {
   const labelOption = fromNullable(label)
-  return isNone(labelOption) ? {} : { label: labelOption.value }
+  return matchOption(() => ({}), (value: string) => ({ label: value }))(labelOption)
 }
 
 const optionalShadowSide = (side: 'left' | 'right' | undefined): { readonly side?: 'left' | 'right' } => {
   const sideOption = fromNullable(side)
-  return isNone(sideOption) ? {} : { side: sideOption.value }
+  return matchOption(() => ({}), (value: 'left' | 'right') => ({ side: value }))(sideOption)
 }
 
 const optionalShadowHost = (
   host: ReturnType<typeof asNodeId> | undefined
 ): { readonly host?: ReturnType<typeof asNodeId> } => {
   const hostOption = fromNullable(host)
-  return isNone(hostOption) ? {} : { host: hostOption.value }
+  return matchOption(() => ({}), (value: ReturnType<typeof asNodeId>) => ({ host: value }))(hostOption)
 }
 
 const shadowNodeOptionals = (input: ShadowNodeOptionalsInput): Partial<OrgTree['shadowNodes'][number]> => ({
@@ -379,13 +378,13 @@ const buildShadowNodeFromEntry = (input: ShadowNodeFromEntryInput): OrgTree['sha
   const type = extractShadowType(input.entry.node)
   const side = extractShadowSide(input.entry.node)
   const parentHandleOption = fromNullable(input.entry.parentHandle)
-  const host = type === 'staff' && !isNone(parentHandleOption)
-    ? asNodeId(parentHandleOption.value)
+  const host = type === 'staff'
+    ? matchOption(() => undefined, (value: string) => asNodeId(value))(parentHandleOption)
     : undefined
 
   const styleValue = findStringAttrValue('style', input.entry.node.attrs)?.trim().toLowerCase()
   const styleValueOption = fromNullable(styleValue)
-  const hideConnector = !isNone(styleValueOption) && isSuppressedStyle(styleValueOption.value) ? true : undefined
+  const hideConnector = matchOption(() => undefined, (value: string) => isSuppressedStyle(value) ? true : undefined)(styleValueOption)
 
   return [
     {
@@ -414,8 +413,8 @@ const buildDottedEdges = (ast: AstOrg, variables: ResolverVariables): readonly D
     return [{
       from: asNodeId(link.from),
       to: asNodeId(link.to),
-      ...(isNone(labelOption) ? {} : { label: labelOption.value }),
-      ...(isNone(kindOption) ? {} : { kind: kindOption.value })
+      ...matchOption(() => ({}), (value: string) => ({ label: value }))(labelOption),
+      ...matchOption(() => ({}), (value: string) => ({ kind: value }))(kindOption)
     }]
   })
 
@@ -434,7 +433,7 @@ const buildShadowNodes = (
     parentHandle: string | undefined
   ): readonly ShadowAstEntry[] => {
     const self = node.kind === 'shadow' ? [{ node, parentHandle }] : []
-    const currentHandle = getOrElse<string | undefined>(() => node.handle)(fromNullable(nodeToHandle.get(node)))
+    const currentHandle = getOrElseOption<string | undefined>(() => node.handle)(fromNullable(nodeToHandle.get(node)))
     const childEntries = node.children.flatMap((child) => collectShadowEntries(child, currentHandle))
     const staffEntries = node.staffNodes.flatMap((staffNode) => collectShadowEntries(staffNode, currentHandle))
     return [...self, ...childEntries, ...staffEntries]

@@ -10,7 +10,7 @@
  */
 
 import type { Option } from '@tsfpp/prelude'
-import { assoc, conj, entriesOfMap, fromNullable, getOrElse, intoMap, intoSet, isNone, none, some } from '@tsfpp/prelude'
+import { assoc, conj, entriesOf, fromNullable, getOrElseOption, intoMap, intoSet, isNone, matchOption, none, some } from '@tsfpp/prelude'
 import type { DeptId, NodeId } from '../types/branded'
 import type { DottedEdge, OrgNode, OrgTree } from '../types/org-tree'
 
@@ -48,8 +48,8 @@ const buildNodeIndex = (
 
   return childNodes(node).reduce<ReadonlyMap<string, IndexedOrgNode>>(
     (acc, child) => intoMap([
-      ...entriesOfMap(acc),
-      ...entriesOfMap(buildNodeIndex(child, some(rawId(node.id))))
+      ...entriesOf(acc),
+      ...entriesOf(buildNodeIndex(child, some(rawId(node.id))))
     ]),
     ownEntry
   )
@@ -153,7 +153,7 @@ export const computeReportingChain = (
   const index = buildNodeIndex(tree.root)
   const reportingTargetId = resolveReportingTargetId(index, rawId(targetId))
   const reportingTargetOption = fromNullable(reportingTargetId)
-  return isNone(reportingTargetOption) ? [] : buildReportingChainFromIndex(index, reportingTargetOption.value)
+  return matchOption(() => [], (value: NodeId) => buildReportingChainFromIndex(index, value))(reportingTargetOption)
 }
 
 // ---------------------------------------------------------------------------
@@ -202,7 +202,7 @@ const walkAltChain = (input: WalkAltChainInput): AltChain => {
     return [personNodeId]
   }
 
-  const resolvedNextId = getOrElse<NodeId>(() => nextRawOption.value)(fromNullable(resolveReportingTargetId(input.nodeIndex, nextRawOption.value)))
+  const resolvedNextId = getOrElseOption<NodeId>(() => nextRawOption.value)(fromNullable(resolveReportingTargetId(input.nodeIndex, nextRawOption.value)))
 
   return [
     personNodeId,

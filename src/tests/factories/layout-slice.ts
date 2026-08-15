@@ -6,7 +6,7 @@
  * @packageDocumentation
  */
 
-import { fromNullable, getOrElse, intoMap, isNone, none, some } from '@tsfpp/prelude'
+import { fromNullable, getOrElseOption, intoMap, matchOption, none, some } from '@tsfpp/prelude'
 import type { IndexedNode, IndexedTree, LayoutPoint, PlacedTree, RenderConfig } from '../../layout/types'
 import { asDeptId, asNodeId } from '../../types/branded'
 import type { OrgNode, OrgTree } from '../../types/org-tree'
@@ -17,7 +17,7 @@ const optionalLayoutHint = (
   layoutHint: IndexedNode['layoutHint']
 ): { readonly layoutHint?: LayoutHintValue } => {
   const layoutHintOption = fromNullable(layoutHint)
-  return isNone(layoutHintOption) ? {} : { layoutHint: layoutHintOption.value }
+  return matchOption(() => ({}), (value: LayoutHintValue) => ({ layoutHint: value }))(layoutHintOption)
 }
 
 /** Build mkSliceRenderConfig test fixture values. */
@@ -139,8 +139,8 @@ export const mkIndexTreeEmployee = (input: {
   kind: 'employee',
   id: asNodeId(input.id),
   meta: { title: input.title },
-  children: getOrElse<readonly OrgNode[]>(() => [])(fromNullable(input.children)),
-  staff: getOrElse<ReadonlyArray<{ readonly id: string; readonly side: 'left' | 'right'; readonly label: string }>>(() => [])(fromNullable(input.staff))
+  children: getOrElseOption<readonly OrgNode[]>(() => [])(fromNullable(input.children)),
+  staff: getOrElseOption<ReadonlyArray<{ readonly id: string; readonly side: 'left' | 'right'; readonly label: string }>>(() => [])(fromNullable(input.staff))
     .map((entry) => ({ id: asNodeId(entry.id), side: entry.side, label: entry.label }))
 })
 

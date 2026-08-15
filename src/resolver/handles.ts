@@ -15,7 +15,7 @@
  */
 
 import type { AstNode } from '../types/ast'
-import { assoc, conj, fromNullable, getOrElse, intoMap, intoSet, isNone } from '@tsfpp/prelude'
+import { assoc, conj, fromNullable, getOrElseOption, intoMap, intoSet, isNone } from '@tsfpp/prelude'
 import { collectNodes } from './tree'
 
 /**
@@ -87,7 +87,7 @@ const assignHandle = (acc: HandleMapAcc, node: AstNode): HandleMapAcc => {
     }
   }
 
-  const base = slugify(getOrElse<string>(() => 'node')(fromNullable(node.displayName)))
+  const base = slugify(getOrElseOption<string>(() => 'node')(fromNullable(node.displayName)))
   const autoHandle = uniqueAutoHandle(base, acc.used)
   return {
     used: conj(autoHandle)(acc.used),

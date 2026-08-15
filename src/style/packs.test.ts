@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { fromNullable, getOrElse, isNone } from '@tsfpp/prelude'
+import { fromNullable, getOrElseOption, isNone } from '@tsfpp/prelude'
 import { createStylePackLoader, getStylePack, stylePacks } from './packs'
 
 describe('stylePacks', () => {
@@ -16,7 +16,7 @@ describe('getStylePack', () => {
 
     expect(lower).toBeDefined()
     expect(upper).toBe(lower)
-    expect(getOrElse<string>(() => '')(fromNullable(lower)).includes('style')).toBe(true)
+    expect(getOrElseOption<string>(() => '')(fromNullable(lower)).includes('style')).toBe(true)
   })
 
   it('returns undefined for unknown pack names', () => {
@@ -28,7 +28,7 @@ describe('createStylePackLoader', () => {
   it('prefers custom pack entries over built-in packs', () => {
     const loader = createStylePackLoader({ minimal: 'custom minimal style' })
 
-    expect(getOrElse<string>(() => '')(fromNullable(loader('minimal')))).toBe('custom minimal style')
+    expect(getOrElseOption<string>(() => '')(fromNullable(loader('minimal')))).toBe('custom minimal style')
   })
 
   it('falls back to built-in and unknown results when custom pack missing', () => {

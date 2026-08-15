@@ -9,7 +9,7 @@
  * @packageDocumentation
  */
 
-import { getStringField, isOk, isRecord, isSome, tryCatch } from '@tsfpp/prelude'
+import { getStringField, isOk, isRecord, matchOption, tryCatch } from '@tsfpp/prelude'
 import { tokenize } from '../lexer/tokenize'
 import type { AstOrg } from '../types/ast'
 import type { ParseResult } from '../types/results'
@@ -21,7 +21,7 @@ const errorMessage = (error: unknown): string => {
     return String(error)
   }
   const message = getStringField(error, 'message')
-  return isSome(message) ? message.value : String(error)
+  return matchOption(() => String(error), (value: string) => value)(message)
 }
 
 /**

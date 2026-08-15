@@ -6,11 +6,11 @@
  * @packageDocumentation
  */
 
-import { fromNullable, isNone } from '@tsfpp/prelude'
+import { findO, isNone, type Option } from '@tsfpp/prelude'
 import type { AstAttr } from '../types/ast'
 
-const findAttrByKey = (key: string, attrs: readonly AstAttr[]): AstAttr | undefined =>
-  attrs.find((attr) => attr.key === key)
+const findAttrByKey = (key: string, attrs: readonly AstAttr[]): Option<AstAttr> =>
+  findO((attr: AstAttr) => attr.key === key)(attrs)
 
 /**
  * Look up a string-typed attribute value by key.
@@ -20,7 +20,7 @@ const findAttrByKey = (key: string, attrs: readonly AstAttr[]): AstAttr | undefi
  * @returns The string value when the attribute exists and its value is typed as a string literal; otherwise `undefined`.
  */
 export const findStringAttrValue = (key: string, attrs: readonly AstAttr[]): string | undefined => {
-  const attrOption = fromNullable(findAttrByKey(key, attrs))
+  const attrOption = findAttrByKey(key, attrs)
   if (isNone(attrOption)) return undefined
   if (attrOption.value.value.kind !== 'string') {
     return undefined
@@ -36,7 +36,7 @@ export const findStringAttrValue = (key: string, attrs: readonly AstAttr[]): str
  * @returns The numeric value when the attribute exists and its value is typed as a number literal; otherwise `undefined`.
  */
 export const findNumberAttrValue = (key: string, attrs: readonly AstAttr[]): number | undefined => {
-  const attrOption = fromNullable(findAttrByKey(key, attrs))
+  const attrOption = findAttrByKey(key, attrs)
   if (isNone(attrOption)) return undefined
   if (attrOption.value.value.kind !== 'number') {
     return undefined

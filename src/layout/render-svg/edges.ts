@@ -13,7 +13,7 @@
  */
 
 import type { ResolvedStyleMap } from '../../style/dsl'
-import { fromNullable, getOrElse, isSome, pipe } from '@tsfpp/prelude'
+import { fromNullable, getOrElseOption, isSome, pipe } from '@tsfpp/prelude'
 import type { EdgeRoute, IndexedTree, PlacedTree, PlacedStaff, RenderConfig } from '../types'
 import {
   boundsFromRect,
@@ -148,7 +148,7 @@ const renderStaffConnectorSide = (
       const staffW = input.cfg.staffSize * input.cfg.colWidth
       const x1 = pipe(
         fromNullable(nextSideState.previousOutX),
-        getOrElse(() => staffBranchStartX({
+        getOrElseOption(() => staffBranchStartX({
           isLeft: input.isLeft,
           parentX: input.parentX,
           nodeW: input.nodeW,
@@ -239,7 +239,7 @@ const renderRoutedSolidEdges = (
   }
 
   const pointsAttr = pixels.map((pt) => `${pt.x},${pt.y}`).join(' ')
-  const edgeWidth = pipe(fromNullable(route.edgeWidth), getOrElse(() => 2))
+  const edgeWidth = pipe(fromNullable(route.edgeWidth), getOrElseOption(() => 2))
   const element = `<polyline class="edge" points="${pointsAttr}" fill="none" stroke="${input.safeCfg.edgeStroke}"${strokeWidthAttr(edgeWidth)}${edgeStrokeStyleAttrs(route.edgeStyle)} />`
   return {
     elements: [...state.elements, element],
@@ -266,7 +266,7 @@ const renderFallbackSolidEdges = (
         const y2 = childPixels.y
         const edgeStyle = input.styleMap.get(childId)?.edgeStyle
         const widthValue = input.styleMap.get(childId)?.edgeWidth
-        const edgeWidth = pipe(fromNullable(widthValue), getOrElse(() => 2))
+        const edgeWidth = pipe(fromNullable(widthValue), getOrElseOption(() => 2))
         const element = `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${input.safeCfg.edgeStroke}"${strokeWidthAttr(edgeWidth)}${edgeStrokeStyleAttrs(edgeStyle)} />`
 
         return {

@@ -18,7 +18,7 @@
  * Returns structured errors with line/col info and suggestions for misspellings.
  */
 
-import { assoc, fromNullable, getOrElse, intoMap, isNone } from '@tsfpp/prelude'
+import { assoc, fromNullable, getOrElseOption, intoMap, isNone, matchOption } from '@tsfpp/prelude'
 import type { AstOrg } from '../types/ast'
 import type { ResolveError } from '../types/results'
 import type { HandleEntry } from './handles'
@@ -29,7 +29,7 @@ const numberRange = (startInclusive: number, endExclusive: number): ReadonlyArra
   Array.from({ length: Math.max(0, endExclusive - startInclusive) }, (_value, index) => startInclusive + index)
 
 const indexOr = (values: ReadonlyArray<number>, index: number, fallback: number): number =>
-  getOrElse<number>(() => fallback)(fromNullable(values[index]))
+  getOrElseOption<number>(() => fallback)(fromNullable(values[index]))
 
 const levenshtein = (a: string, b: string): number => {
   const m = a.length
@@ -112,7 +112,7 @@ type UnknownHandleErrorInput = {
 
 const optionalSuggestion = (suggestion: string | undefined): { readonly suggestion?: string } => {
   const suggestionOption = fromNullable(suggestion)
-  return isNone(suggestionOption) ? {} : { suggestion: suggestionOption.value }
+  return matchOption(() => ({}), (value: string) => ({ suggestion: value }))(suggestionOption)
 }
 
 const buildUnknownHandleError = (input: UnknownHandleErrorInput): ResolveError => ({
@@ -224,7 +224,7 @@ const resolveNodeHandle = (
   if (!isNone(explicitHandleOption)) return explicitHandleOption.value
 
   const displayNameOption = fromNullable(node.displayName)
-  return isNone(displayNameOption) ? fallback : displayNameOption.value
+  return matchOption(() => fallback, (value: string) => value)(displayNameOption)
 }
 
 const validateDuplicateHandles = (

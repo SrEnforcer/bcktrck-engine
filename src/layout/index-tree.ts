@@ -13,7 +13,7 @@
 import type { DeptId, NodeId } from '../types/branded'
 import type { OrgNode, OrgTree } from '../types/org-tree'
 import type { Option } from '@tsfpp/prelude'
-import { fromNullable, intoMap, isNone, none, some } from '@tsfpp/prelude'
+import { fromNullable, intoMap, matchOption, none, some } from '@tsfpp/prelude'
 import type { IndexedNode, IndexedTree, LayoutNodeKind } from './types'
 
 /** Extracts the raw string id from a branded NodeId or DeptId. */
@@ -100,8 +100,8 @@ const optionalLayoutHints = (
   const hangingSideOption = fromNullable(node.hangingSide)
 
   return {
-    ...(!isNone(layoutHintOption) ? { layoutHint: layoutHintOption.value } : {}),
-    ...(!isNone(hangingSideOption) ? { hangingSide: hangingSideOption.value } : {})
+    ...matchOption(() => ({}), (value: NonNullable<IndexedNode['layoutHint']>) => ({ layoutHint: value }))(layoutHintOption),
+    ...matchOption(() => ({}), (value: NonNullable<IndexedNode['hangingSide']>) => ({ hangingSide: value }))(hangingSideOption)
   }
 }
 
@@ -142,7 +142,7 @@ const createIndexedNodeBase = (
     kind: params.kind,
     label: params.label,
     ...optionalLayoutHints(node),
-    ...(!isNone(triangleOption) ? { triangleEffect: triangleOption.value } : {}),
+    ...matchOption(() => ({}), (value: { readonly color: string }) => ({ triangleEffect: value }))(triangleOption),
     depth: params.depth,
     parentId: params.parentId,
     childIndex: params.childIndex,

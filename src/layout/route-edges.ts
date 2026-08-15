@@ -10,8 +10,8 @@
  * @packageDocumentation
  */
 
-import { fromNullable, isNone } from '@tsfpp/prelude'
-import type { EdgeRoute, EdgeRoutePoint, IndexedTree, PlacedStaff, PlacedTree, RenderConfig } from './types'
+import { findO, fromNullable, getOrElseOption, isNone, mapOption, matchOption, mkNonEmpty, ordNumber, pipe, reduceNonEmpty, semigroupMax } from '@tsfpp/prelude'
+import type { EdgeRoute, EdgeRoutePoint, EdgeStyleValue, IndexedTree, PlacedStaff, PlacedTree, RenderConfig } from './types'
 import type { ResolvedStyleMap } from '../style/dsl'
 import type { ShadowNode } from '../types/org-tree'
 
@@ -204,8 +204,11 @@ const chooseChannelY = (input: {
     minInterior
   ].filter((value, index, values) => values.findIndex((candidate) => almostEqual(candidate, value)) === index)
 
-  const clearChannel = candidates.find((candidateY) => !isHorizontalSegmentBlocked(candidateY, input.start.x, input.end.x, input.obstacleBounds))
-  return clearChannel === undefined ? clampToInterior(mid) : clearChannel
+  return pipe(
+    candidates,
+    findO((candidateY) => !isHorizontalSegmentBlocked(candidateY, input.start.x, input.end.x, input.obstacleBounds)),
+    getOrElseOption(() => clampToInterior(mid))
+  )
 }
 
 const chooseSharedChannelY = (input: {
@@ -232,8 +235,11 @@ const chooseSharedChannelY = (input: {
     minInterior
   ].filter((value, index, values) => values.findIndex((candidate) => almostEqual(candidate, value)) === index)
 
-  const clearChannel = candidates.find((candidateY) => !isHorizontalSegmentBlocked(candidateY, input.start.x, input.end.x, input.obstacleBounds))
-  return clearChannel === undefined ? clampToInterior(mid) : clearChannel
+  return pipe(
+    candidates,
+    findO((candidateY) => !isHorizontalSegmentBlocked(candidateY, input.start.x, input.end.x, input.obstacleBounds)),
+    getOrElseOption(() => clampToInterior(mid))
+  )
 }
 
 const makeRoute = (input: MakeRouteInput): EdgeRoute => {
@@ -393,7 +399,7 @@ const toSharedDefaultChannelY = (input: {
   const placedChildren = input.parent.children
     .map((childId) => {
       const childPosOption = fromNullable(input.placed.positions.get(childId))
-      return isNone(childPosOption) ? undefined : { id: childId, pos: childPosOption.value }
+      return matchOption(() => undefined, (pos: { readonly x: number; readonly y: number }) => ({ id: childId, pos }))(childPosOption)
     })
     .filter((child): child is { readonly id: string; readonly pos: { readonly x: number; readonly y: number } } => child !== undefined)
 
@@ -404,9 +410,11 @@ const toSharedDefaultChannelY = (input: {
   const childCenters = placedChildren.map((child) => child.pos.x + input.cfg.nodeSize / 2)
   const minX = childCenters.reduce((currentMin, x) => Math.min(currentMin, x), input.parentPort.cx)
   const maxX = childCenters.reduce((currentMax, x) => Math.max(currentMax, x), input.parentPort.cx)
-  const maxTopY = placedChildren
-    .map((child) => child.pos.y)
-    .reduce((currentMax, y) => Math.max(currentMax, y), Number.NEGATIVE_INFINITY)
+  const maxTopY = pipe(
+    mkNonEmpty(placedChildren.map((child) => child.pos.y)),
+    mapOption(reduceNonEmpty(semigroupMax(ordNumber).concat)),
+    getOrElseOption(() => input.parentPort.bottom)
+  )
 
   const childIds = placedChildren.map((child) => child.id)
   const obstacleBounds = input.allNodeBounds
@@ -465,7 +473,7 @@ export const routeEdgesWithDiagnostics = (
     ?.filter((shadow) => shadow.type === 'staff')
     .flatMap((shadow) => {
       const hostOption = fromNullable(shadow.host)
-      return isNone(hostOption) ? [] : [String(hostOption.value)]
+      return matchOption(() => [], (value: string) => [String(value)])(hostOption)
     })
     .reduce<ReadonlyArray<string>>((acc, hostId) => (acc.includes(hostId) ? acc : [...acc, hostId]), [])
     ?? []
@@ -510,8 +518,8 @@ export const routeEdgesWithDiagnostics = (
       })
       const fullRoute = {
         ...route,
-        ...(!isNone(edgeStyleOption) ? { edgeStyle: edgeStyleOption.value } : {}),
-        ...(!isNone(edgeWidthOption) ? { edgeWidth: edgeWidthOption.value } : {})
+        ...matchOption(() => ({}), (value: EdgeStyleValue) => ({ edgeStyle: value }))(edgeStyleOption),
+        ...matchOption(() => ({}), (value: number) => ({ edgeWidth: value }))(edgeWidthOption)
       }
       return { ...childAcc, routes: [...childAcc.routes, fullRoute] }
     }, acc)

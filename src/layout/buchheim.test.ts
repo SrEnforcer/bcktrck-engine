@@ -1,4 +1,4 @@
-import { fromNullable, getOrElse, intoMap, none, some } from '@tsfpp/prelude'
+import { fromNullable, getOrElseOption, intoMap, none, some } from '@tsfpp/prelude'
 import { describe, expect, it } from 'vitest'
 import type { IndexedTree } from './types'
 import { buchheim } from './buchheim'
@@ -77,8 +77,8 @@ describe('buchheim when root has two children', () => {
 
     expect(left).toBeDefined()
     expect(right).toBeDefined()
-    const leftX = getOrElse<number>(() => 0)(fromNullable(left?.x))
-    const rightX = getOrElse<number>(() => 0)(fromNullable(right?.x))
+    const leftX = getOrElseOption<number>(() => 0)(fromNullable(left?.x))
+    const rightX = getOrElseOption<number>(() => 0)(fromNullable(right?.x))
 
     expect(leftX < rightX).toBe(true)
     expect(left?.y).toBe(1)
@@ -96,8 +96,8 @@ describe('buchheim when root has two children', () => {
     expect(root).toBeDefined()
     expect(left).toBeDefined()
     expect(right).toBeDefined()
-    const leftX = getOrElse<number>(() => 0)(fromNullable(left?.x))
-    const rightX = getOrElse<number>(() => 0)(fromNullable(right?.x))
+    const leftX = getOrElseOption<number>(() => 0)(fromNullable(left?.x))
+    const rightX = getOrElseOption<number>(() => 0)(fromNullable(right?.x))
 
     expect(root?.x).toBe((leftX + rightX) / 2)
   })

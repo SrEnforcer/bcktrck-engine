@@ -1,4 +1,4 @@
-import { fromNullable, getOrElse, intoMap, none, some } from '@tsfpp/prelude'
+import { fromNullable, getOrElseOption, intoMap, none, some } from '@tsfpp/prelude'
 import { describe, expect, it } from 'vitest'
 import { placeStaff } from './staff-placement'
 import type { IndexedTree, PlacedTree } from './types'
@@ -55,10 +55,10 @@ describe('placeStaff when parent position exists', () => {
 
     expect(left).toBeDefined()
     expect(right).toBeDefined()
-    const leftX = getOrElse<number>(() => 1)(fromNullable(left?.x))
-    const leftY = getOrElse<number>(() => 0)(fromNullable(left?.y))
-    const rightX = getOrElse<number>(() => 0)(fromNullable(right?.x))
-    const rightY = getOrElse<number>(() => 0)(fromNullable(right?.y))
+    const leftX = getOrElseOption<number>(() => 1)(fromNullable(left?.x))
+    const leftY = getOrElseOption<number>(() => 0)(fromNullable(left?.y))
+    const rightX = getOrElseOption<number>(() => 0)(fromNullable(right?.x))
+    const rightY = getOrElseOption<number>(() => 0)(fromNullable(right?.y))
 
     expect(leftX < 0.34).toBe(true)
     expect(rightX > 0.34).toBe(true)

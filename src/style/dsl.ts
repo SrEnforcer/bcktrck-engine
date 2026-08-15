@@ -12,7 +12,7 @@
  */
 
 import type { EdgeStyleValue } from '../layout/types'
-import { fromNullable, intoMap, intoSet, isNone } from '@tsfpp/prelude'
+import { findO, fromNullable, intoMap, intoSet, isNone } from '@tsfpp/prelude'
 import { extractTopLevelBlock, type BlockLine } from './dsl-blocks'
 import type { AstNodeKind } from '../types/ast'
 import type { ParseErr } from '../types/results'
@@ -556,8 +556,7 @@ const parseStyleLines = (
     return finalState
   }
 
-  const emptyRule = finalState.rules.find((rule) => rule.declarations.length === 0)
-  const emptyRuleOption = fromNullable(emptyRule)
+  const emptyRuleOption = findO((rule: StyleRule) => rule.declarations.length === 0)(finalState.rules)
   if (!isNone(emptyRuleOption)) {
     return {
       ok: false,

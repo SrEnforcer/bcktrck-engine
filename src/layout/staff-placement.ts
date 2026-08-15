@@ -9,7 +9,7 @@
  * @packageDocumentation
  */
 
-import { fromNullable, getOrElse, isNone, pipe } from '@tsfpp/prelude'
+import { fromNullable, getOrElseOption, isNone, pipe } from '@tsfpp/prelude'
 import type { IndexedTree, PlacedTree, PlacedStaff, StaffPosition } from './types'
 
 type PlaceStaffConfig = {
@@ -51,7 +51,7 @@ const toStaffPosition = (input: ToStaffPositionInput): StaffPosition => {
     id: input.staffId,
     label: pipe(
       fromNullable(input.tree.staffLabels?.get(input.staffId)),
-      getOrElse(() => input.staffId)
+      getOrElseOption(() => input.staffId)
     ),
     x: parentCenterX + direction * distanceFromParent - input.config.staffSize / 2,
     y: input.parentY - input.config.staffSize / 2,
@@ -128,8 +128,8 @@ export const placeStaff = (
   placed: PlacedTree,
   cfg: { readonly staffSize?: number; readonly nodeSize?: number } = {}
 ): PlacedStaff => {
-  const staffSize = pipe(fromNullable(cfg.staffSize), getOrElse(() => 0.6))
-  const nodeSize = pipe(fromNullable(cfg.nodeSize), getOrElse(() => 1))
+  const staffSize = pipe(fromNullable(cfg.staffSize), getOrElseOption(() => 0.6))
+  const nodeSize = pipe(fromNullable(cfg.nodeSize), getOrElseOption(() => 1))
   const config: PlaceStaffConfig = {
     staffSize,
     nodeSize,

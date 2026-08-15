@@ -18,7 +18,7 @@
 /* eslint-disable max-lines */
 
 import type { Option } from '@tsfpp/prelude'
-import { fromNullable, getOrElse, intoMap, isNone, isSome, none, some } from '@tsfpp/prelude'
+import { fromNullable, getOrElseOption, intoMap, isNone, isSome, matchOption, none, some } from '@tsfpp/prelude'
 import { parseAndResolveBtl } from './subtree/parse-and-resolve'
 import { parseBtl } from './parser/parse'
 import { isolateSubtree, isolateSubtrees, isolateUpstreamSubtree, listSubtrees } from './subtree/subtree'
@@ -158,7 +158,7 @@ const astSubtrees = (
 
   const resolvedHandleOption = fromNullable(nodeToHandle.get(node))
   const displayNameOption = fromNullable(node.displayName)
-  const label = getOrElse<string>(() => getOrElse<string>(() => 'node')(resolvedHandleOption))(displayNameOption)
+  const label = getOrElseOption<string>(() => getOrElseOption<string>(() => 'node')(resolvedHandleOption))(displayNameOption)
 
   const ownEntry: readonly SubtreeEntry[] =
     isSome(resolvedHandleOption)
@@ -234,10 +234,10 @@ const iconMapForNonDepartment = (node: Exclude<OrgNode, Extract<OrgNode, { reado
           node.id as string,
           [
             {
-              name: getOrElse<string>(() => '')(fromNullable(node.meta.icon)),
-              pos: getOrElse<IconSpec['pos']>(() => 'upper-left')(fromNullable(node.meta.iconPos)),
-              size: getOrElse<number>(() => 14)(fromNullable(node.meta.iconSize)),
-              opacity: getOrElse<number>(() => 0.3)(fromNullable(node.meta.iconOpacity))
+              name: getOrElseOption<string>(() => '')(fromNullable(node.meta.icon)),
+              pos: getOrElseOption<IconSpec['pos']>(() => 'upper-left')(fromNullable(node.meta.iconPos)),
+              size: getOrElseOption<number>(() => 14)(fromNullable(node.meta.iconSize)),
+              opacity: getOrElseOption<number>(() => 0.3)(fromNullable(node.meta.iconOpacity))
             }
           ]
         ]
@@ -284,21 +284,21 @@ const applyStyleToIcons = (
 ): readonly IconSpec[] | undefined => {
   const styleIconOption = fromNullable(style.icon)
   if (!isNone(styleIconOption) && styleIconOption.value.length > 0) {
-    const pos = getOrElse<IconSpec['pos']>(() => 'upper-left')(fromNullable(style.iconPos))
+    const pos = getOrElseOption<IconSpec['pos']>(() => 'upper-left')(fromNullable(style.iconPos))
     return styleIconOption.value.map((name) => ({
       name,
       pos,
-      size: getOrElse<number>(() => 14)(fromNullable(style.iconSize)),
-      opacity: getOrElse<number>(() => 0.3)(fromNullable(style.iconOpacity))
+      size: getOrElseOption<number>(() => 14)(fromNullable(style.iconSize)),
+      opacity: getOrElseOption<number>(() => 0.3)(fromNullable(style.iconOpacity))
     }))
   }
   const existingOption = fromNullable(existing)
   if (!isNone(existingOption)) {
     return existingOption.value.map((spec) => ({
       name: spec.name,
-      pos: getOrElse<IconSpec['pos']>(() => spec.pos)(fromNullable(style.iconPos)),
-      size: getOrElse<number>(() => spec.size)(fromNullable(style.iconSize)),
-      opacity: getOrElse<number>(() => getOrElse<number>(() => 0.3)(fromNullable(spec.opacity)))(fromNullable(style.iconOpacity))
+      pos: getOrElseOption<IconSpec['pos']>(() => spec.pos)(fromNullable(style.iconPos)),
+      size: getOrElseOption<number>(() => spec.size)(fromNullable(style.iconSize)),
+      opacity: getOrElseOption<number>(() => getOrElseOption<number>(() => 0.3)(fromNullable(spec.opacity)))(fromNullable(style.iconOpacity))
     }))
   }
   return undefined
@@ -309,7 +309,7 @@ const buildIconMap = (
   styleMap: ReadonlyMap<string, ResolvedNodeStyle> | undefined
 ): ReadonlyMap<string, readonly IconSpec[]> => {
   const base = collectIconsFromNode(tree.root)
-  const effectiveStyleMap = getOrElse<ReadonlyMap<string, ResolvedNodeStyle>>(() => mapFromEntries<string, ResolvedNodeStyle>([]))(fromNullable(styleMap))
+  const effectiveStyleMap = getOrElseOption<ReadonlyMap<string, ResolvedNodeStyle>>(() => mapFromEntries<string, ResolvedNodeStyle>([]))(fromNullable(styleMap))
   return Array.from(effectiveStyleMap.entries()).reduce<ReadonlyMap<string, readonly IconSpec[]>>(
     (acc, [nodeId, style]) => {
       const updated = applyStyleToIcons(style, acc.get(nodeId))
@@ -343,12 +343,12 @@ const routeDiagnosticsToErrors = (
     kind: 'invalid_attr_value' as const,
     handle: diag.kind === 'missing_parent_position'
       ? diag.parentId
-      : getOrElse<string>(() => diag.parentId)(fromNullable(diag.childId)),
+      : getOrElseOption<string>(() => diag.parentId)(fromNullable(diag.childId)),
     line: 0,
     col: 0,
     message: diag.kind === 'missing_parent_position'
       ? `Cannot route edges: missing parent position '${diag.parentId}'`
-      : `Cannot route edges: missing child position '${getOrElse<string>(() => '')(fromNullable(diag.childId))}' under parent '${diag.parentId}'`
+      : `Cannot route edges: missing child position '${getOrElseOption<string>(() => '')(fromNullable(diag.childId))}' under parent '${diag.parentId}'`
   }))
 
 const renderErrorToResolveError = (error: RenderError): ResolveError => {
@@ -383,7 +383,7 @@ const normalizeSubtreeIds = (subtreeIds: readonly string[] | undefined): readonl
 const unknownHandleFromOptions = (requestedSubtreeIds: readonly string[], subtreeIdOption: Option<string>): string =>
   requestedSubtreeIds.length > 0
     ? requestedSubtreeIds.join(', ')
-    : getOrElse<string>(() => '')(subtreeIdOption)
+    : getOrElseOption<string>(() => '')(subtreeIdOption)
 
 const selectCompileTree = (
   resolvedTree: OrgTree,
@@ -414,7 +414,7 @@ const selectCompileTree = (
             ? `No subtreeIds found in tree: "${unknownHandle}"`
             : !isNone(upstreamIdOption)
               ? `upstreamId not found in tree: "${upstreamIdOption.value}"`
-            : `subtreeId not found in tree: "${getOrElse<string>(() => '')(subtreeIdOption)}"`
+            : `subtreeId not found in tree: "${getOrElseOption<string>(() => '')(subtreeIdOption)}"`
         }
       ]
     }
@@ -520,7 +520,7 @@ const collectHostedStaffShadowIds = (tree: OrgTree): ReadonlyArray<string> =>
     .filter((shadow) => shadow.type === 'staff')
     .flatMap((shadow) => {
       const hostOption = fromNullable(shadow.host)
-      return isNone(hostOption) ? [] : [String(hostOption.value)]
+      return matchOption(() => [], (value: string) => [String(value)])(hostOption)
     })
     .reduce<ReadonlyArray<string>>((acc, hostId) => (acc.includes(hostId) ? acc : [...acc, hostId]), [])
 

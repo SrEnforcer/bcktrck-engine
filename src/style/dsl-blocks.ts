@@ -6,7 +6,7 @@
  * @packageDocumentation
  */
 
-import { fromNullable, isNone } from '@tsfpp/prelude'
+import { fromNullable, isNone, matchOption } from '@tsfpp/prelude'
 
 /**
  * Style/defs block extraction helpers.
@@ -26,13 +26,13 @@ export type BlockLine = {
 
 const leadingIndent = (line: string): number => {
   const match = line.match(/^[ \t]*/)
-  const matchOption = fromNullable(match)
-  if (isNone(matchOption)) {
+  const matchArrayOption = fromNullable(match)
+  if (isNone(matchArrayOption)) {
     return 0
   }
 
-  const firstSegmentOption = fromNullable(matchOption.value[0])
-  return isNone(firstSegmentOption) ? 0 : firstSegmentOption.value.length
+  const firstSegmentOption = fromNullable(matchArrayOption.value[0])
+  return matchOption(() => 0, (value: string) => value.length)(firstSegmentOption)
 }
 
 /**

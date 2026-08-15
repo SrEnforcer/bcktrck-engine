@@ -7,7 +7,7 @@
  * @packageDocumentation
  */
 
-import { fromNullable, getOrElse, intoMap, isNone } from '@tsfpp/prelude'
+import { fromNullable, getOrElseOption, intoMap, isNone, matchOption } from '@tsfpp/prelude'
 import type { IndexedNode, IndexedTree, LayoutPoint, PlacedTree } from './types'
 
 // DEVIATION(2.4): Layout hint placement logic remains in one module until lane and shift helpers are extracted.
@@ -131,10 +131,10 @@ const laneAndSide = (input: LaneAndSideInput): { readonly lane: number; readonly
   const overriddenSideOption = fromNullable(overriddenSide)
 
   if (input.hint === 'hanging-left') {
-    return { lane: input.index, side: getOrElse<-1 | 1>(() => -1)(overriddenSideOption) }
+    return { lane: input.index, side: getOrElseOption<-1 | 1>(() => -1)(overriddenSideOption) }
   }
 
-  return { lane: input.index, side: getOrElse<-1 | 1>(() => 1)(overriddenSideOption) }
+  return { lane: input.index, side: getOrElseOption<-1 | 1>(() => 1)(overriddenSideOption) }
 }
 
 const resolveBothSideHint = (input: ResolveBothSideHintInput): LaneAndSideResult => {
@@ -284,7 +284,7 @@ const subtreeSpan = (
   const xs = collectSubtreeIds(nodeId, tree)
     .flatMap((id) => {
       const xOption = fromNullable(positions.get(id)?.x)
-      return isNone(xOption) ? [] : [xOption.value]
+      return matchOption(() => [], (value: number) => [value])(xOption)
     })
 
   if (xs.length === 0) {
@@ -343,7 +343,7 @@ const childXsForNode = (
   node.children
     .flatMap((childId) => {
       const xOption = fromNullable(positions.get(childId)?.x)
-      return isNone(xOption) ? [] : [xOption.value]
+      return matchOption(() => [], (value: number) => [value])(xOption)
     })
 
 const insertAscending = (sorted: ReadonlyArray<number>, value: number): ReadonlyArray<number> => {
@@ -364,8 +364,8 @@ const medianX = (xs: ReadonlyArray<number>): number => {
   const middleOption = fromNullable(middle)
   const upperMiddleOption = fromNullable(upperMiddle)
   return sorted.length % 2 === 1
-    ? getOrElse<number>(() => 0)(middleOption)
-    : (getOrElse<number>(() => 0)(middleOption) + getOrElse<number>(() => 0)(upperMiddleOption)) / 2
+    ? getOrElseOption<number>(() => 0)(middleOption)
+    : (getOrElseOption<number>(() => 0)(middleOption) + getOrElseOption<number>(() => 0)(upperMiddleOption)) / 2
 }
 
 const centerChildGroupUnderParent = (input: CenterChildGroupUnderParentInput): ReadonlyMap<string, LayoutPoint> => {
@@ -456,7 +456,7 @@ const collectStaffRowShifts = (input: StaffRowShiftInput & { readonly staffRowHo
 const applyStaffRowShift = (positions: ReadonlyMap<string, LayoutPoint>, shiftByNodeId: ReadonlyMap<string, number>): ReadonlyMap<string, LayoutPoint> =>
   mapFromEntries(
     Array.from(positions.entries()).map(([nodeId, point]) => {
-      const shift = getOrElse<number>(() => 0)(fromNullable(shiftByNodeId.get(nodeId)))
+      const shift = getOrElseOption<number>(() => 0)(fromNullable(shiftByNodeId.get(nodeId)))
       return [nodeId, shift === 0 ? point : { x: point.x, y: point.y + shift }] as const
     })
   )
@@ -477,7 +477,7 @@ export const applyLayoutHints = (
   placed: PlacedTree,
   options: { readonly staffRowHostIds?: ReadonlyArray<string> } = {}
 ): PlacedTree => {
-  const staffRowHostIds = getOrElse<ReadonlyArray<string>>(() => [])(fromNullable(options.staffRowHostIds))
+  const staffRowHostIds = getOrElseOption<ReadonlyArray<string>>(() => [])(fromNullable(options.staffRowHostIds))
   const subtreeHasHanging = createSubtreeHangingIndex(tree)
   const hintedPositions = walkPreOrder(tree.rootId, tree, mapClone(placed.positions))
   const compactedPositions = compactBranches({ nodeId: tree.rootId, tree, positions: hintedPositions, subtreeHasHanging })

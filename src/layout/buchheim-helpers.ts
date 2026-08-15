@@ -7,7 +7,7 @@
  */
 
 import type { Option } from '@tsfpp/prelude'
-import { fromNullable, getOrElse, intoMap, isNone } from '@tsfpp/prelude'
+import { fromNullable, getOrElseOption, intoMap, isNone, matchOption } from '@tsfpp/prelude'
 import type {
   AdvanceApportionStateInput,
   ApportionState,
@@ -123,7 +123,7 @@ const scratchPrelimOrZero = (
   if (isNone(idOption)) return 0
 
   const nodeScratchOption = fromNullable(scratch.get(idOption.value))
-  return isNone(nodeScratchOption) ? 0 : nodeScratchOption.value.prelim
+  return matchOption(() => 0, (value: Scratch) => value.prelim)(nodeScratchOption)
 }
 
 /**
@@ -149,7 +149,7 @@ export const childMidpoint = (children: readonly string[], scratch: ReadonlyMap<
  * @returns Ordered child ids, or an empty array when missing.
  */
 export const childIds = (id: string, nodes: ReadonlyMap<string, NodeMeta>): readonly string[] =>
-  getOrElse<readonly string[]>(() => [])(fromNullable(nodes.get(id)?.children))
+  getOrElseOption<readonly string[]>(() => [])(fromNullable(nodes.get(id)?.children))
 
 /**
  * Prefer a contour candidate id and fall back to the current id when absent.
@@ -159,7 +159,7 @@ export const childIds = (id: string, nodes: ReadonlyMap<string, NodeMeta>): read
  * @returns `candidate` when present, otherwise `fallback`.
  */
 export const nextContourOrSelf = (candidate: string | null, fallback: string): string =>
-  getOrElse<string>(() => fallback)(fromNullable(candidate))
+  getOrElseOption<string>(() => fallback)(fromNullable(candidate))
 
 /**
  * Resolve the first child id for a node.
@@ -173,7 +173,7 @@ export const firstChildId = (id: string, nodes: ReadonlyMap<string, NodeMeta>): 
   if (children.length === 0) {
     return null
   }
-  return getOrElse<string | null>(() => null)(fromNullable(children[0]))
+  return getOrElseOption<string | null>(() => null)(fromNullable(children[0]))
 }
 
 const lastChildId = (id: string, nodes: ReadonlyMap<string, NodeMeta>): string | null => {
@@ -181,7 +181,7 @@ const lastChildId = (id: string, nodes: ReadonlyMap<string, NodeMeta>): string |
   if (children.length === 0) {
     return null
   }
-  return getOrElse<string | null>(() => null)(fromNullable(children[children.length - 1]))
+  return getOrElseOption<string | null>(() => null)(fromNullable(children[children.length - 1]))
 }
 
 const childByDirection = (
@@ -268,14 +268,14 @@ export const leftSibling = (id: string, nodes: ReadonlyMap<string, NodeMeta>): s
   const parentIdOption = node.parentId
   if (!isNone(parentIdOption) && node.childIndex > 0) {
     const sibling = nodes.get(parentIdOption.value)!.children[node.childIndex - 1]
-    return getOrElse<string | null>(() => null)(fromNullable(sibling))
+    return getOrElseOption<string | null>(() => null)(fromNullable(sibling))
   }
   return null
 }
 
 const resolveAncestor = (input: ResolveAncestorInput): string => {
   const vimAncestorId = input.scratch.get(input.vim)!.ancestor
-  const vimAncestorParent = getOrElse<Option<string>>(() => input.nodes.get(input.vim)!.parentId)(fromNullable(input.nodes.get(vimAncestorId)?.parentId))
+  const vimAncestorParent = getOrElseOption<Option<string>>(() => input.nodes.get(input.vim)!.parentId)(fromNullable(input.nodes.get(vimAncestorId)?.parentId))
   const vParent = input.nodes.get(input.v)!.parentId
   return sameParentId(vimAncestorParent, vParent) ? vimAncestorId : input.defaultAncestorId
 }
@@ -344,8 +344,8 @@ export const advanceApportionState = (input: AdvanceApportionStateInput): Apport
     vom,
     sim: input.state.sim + input.scratch.get(vim)!.mod,
     sip: sipShifted + input.scratch.get(vip)!.mod,
-    som: isNone(resolvedVomOption) ? input.state.som : input.state.som + input.scratch.get(resolvedVomOption.value)!.mod,
-    sop: isNone(resolvedVopOption) ? sopShifted : sopShifted + input.scratch.get(resolvedVopOption.value)!.mod,
+    som: matchOption(() => input.state.som, (value: string) => input.state.som + input.scratch.get(value)!.mod)(resolvedVomOption),
+    sop: matchOption(() => sopShifted, (value: string) => sopShifted + input.scratch.get(value)!.mod)(resolvedVopOption),
     rightNext: rightmost({ id: vim, depth: 1, nodes: input.nodes, scratch: input.scratch }),
     leftNext: leftmost({ id: vip, depth: 1, nodes: input.nodes, scratch: input.scratch })
   }

@@ -10,7 +10,7 @@
  */
 
 import type { IconNode, IconPos } from './registry'
-import { fromNullable, getOrElse, isNone } from '@tsfpp/prelude'
+import { entriesOfRecord, fromNullable, getOrElseOption, isNone } from '@tsfpp/prelude'
 import { getIcon, DEFAULT_ICON_POS, DEFAULT_ICON_SIZE } from './registry'
 
 /** Re-export icon anchor position literals used by style and render contracts. */
@@ -91,15 +91,14 @@ const escapeAttr = (value: string | number): string =>
 const iconNodesToSvg = (nodes: IconNode): string =>
   nodes
     .map(([tag, attrs]) => {
-      const attrStr = Object.entries(attrs)
+      const attrStr = entriesOfRecord(attrs)
         .flatMap(([k, v]) => {
           const valueOption = fromNullable(v)
           if (isNone(valueOption)) {
             return []
           }
 
-          // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- DEVIATION(1.6): Lucide IconNode attrs are typed as Record<string, any>; cast narrows to the only valid SVG attribute runtime primitives.
-          return [`${k}="${escapeAttr(valueOption.value as string | number)}"`]
+          return [`${k}="${escapeAttr(valueOption.value)}"`]
         })
         .join(' ')
       return `<${tag} ${attrStr}/>`
@@ -120,9 +119,9 @@ const iconNodesToSvg = (nodes: IconNode): string =>
 export const renderIcon = (
   params: RenderIconParams
 ): string => {
-  const size = getOrElse<number>(() => DEFAULT_ICON_SIZE)(fromNullable(params.size))
-  const color = getOrElse<string>(() => 'currentColor')(fromNullable(params.color))
-  const opacity = getOrElse<number>(() => 0.3)(fromNullable(params.opacity))
+  const size = getOrElseOption<number>(() => DEFAULT_ICON_SIZE)(fromNullable(params.size))
+  const color = getOrElseOption<string>(() => 'currentColor')(fromNullable(params.color))
+  const opacity = getOrElseOption<number>(() => 0.3)(fromNullable(params.opacity))
   const { name, x, y } = params
   const nodes = getIcon(name)
   const nodesOption = fromNullable(nodes)
@@ -150,7 +149,7 @@ export const renderIconSpec = (
   const { spec, bounds, color } = params
   const size = spec.size
   const pos = spec.pos
-  const opacity = getOrElse<number>(() => 0.3)(fromNullable(spec.opacity))
+  const opacity = getOrElseOption<number>(() => 0.3)(fromNullable(spec.opacity))
   const { x, y } = iconPosition(pos, bounds, size)
   return renderIcon({ name: spec.name, x, y, size, color, opacity })
 }

@@ -6,7 +6,7 @@
  * @packageDocumentation
  */
 
-import { fromNullable, intoMap, isSome } from '@tsfpp/prelude'
+import { findO, fromNullable, intoMap, isSome, pipe, type Option } from '@tsfpp/prelude'
 import { applyDefinitionsToStyleSheet, extractDefinitionsBlock, extractStyleSheet, mergeStyleSheets } from '../style/dsl'
 import type { ParseErr } from '../types/results'
 
@@ -46,15 +46,17 @@ const mapEntries = <K, V>(map: ReadonlyMap<K, V>): ReadonlyArray<readonly [K, V]
 const mergeMaps = <K, V>(left: ReadonlyMap<K, V>, right: ReadonlyMap<K, V>): ReadonlyMap<K, V> =>
   mapFromEntries([...mapEntries(left), ...mapEntries(right)])
 
-const firstNonBlockLine = (source: string): { readonly line: number; readonly col: number; readonly text: string } | undefined =>
-  source
-    .replace(/\r\n/g, '\n')
-    .split('\n')
-    .map((line, index) => ({ line: index + 1, col: line.search(/\S/) + 1, text: line }))
-    .find(({ text }) => {
+const firstNonBlockLine = (source: string): Option<{ readonly line: number; readonly col: number; readonly text: string }> =>
+  pipe(
+    source
+      .replace(/\r\n/g, '\n')
+      .split('\n')
+      .map((line, index) => ({ line: index + 1, col: line.search(/\S/) + 1, text: line })),
+    findO(({ text }) => {
       const trimmed = text.trim()
       return trimmed.length > 0 && !trimmed.startsWith('//')
     })
+  )
 
 /**
  * Parse an optional supplemental style source that may contain only defs/style blocks.
@@ -77,8 +79,7 @@ export const parseSupplementalStyleSource = (
     return styleExtraction
   }
 
-  const leftover = firstNonBlockLine(styleExtraction.strippedSource)
-  const leftoverOption = fromNullable(leftover)
+  const leftoverOption = firstNonBlockLine(styleExtraction.strippedSource)
   if (isSome(leftoverOption)) {
     return {
       ok: false,

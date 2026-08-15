@@ -10,18 +10,18 @@
  */
 
 import type { Option } from '@tsfpp/prelude'
-import { fromNullable, getOrElse, isNone, none, some } from '@tsfpp/prelude'
+import { fromNullable, getOrElseOption, isNone, none, some } from '@tsfpp/prelude'
 import type { Token, TokenKind } from '../lexer/tokens'
 import type { ParseResult } from '../types/results'
 
 const lineOrZero = (token: Token | undefined): number =>
-  getOrElse<number>(() => 0)(fromNullable(token?.line))
+  getOrElseOption<number>(() => 0)(fromNullable(token?.line))
 
 const colOrZero = (token: Token | undefined): number =>
-  getOrElse<number>(() => 0)(fromNullable(token?.col))
+  getOrElseOption<number>(() => 0)(fromNullable(token?.col))
 
 const tokenKindOrEof = (token: Token | undefined): TokenKind | 'eof' =>
-  getOrElse<TokenKind | 'eof'>(() => 'eof')(fromNullable(token?.kind))
+  getOrElseOption<TokenKind | 'eof'>(() => 'eof')(fromNullable(token?.kind))
 
 /**
  * A parser takes a token stream and returns a ParseResult.
